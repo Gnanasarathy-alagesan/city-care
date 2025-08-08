@@ -1,0 +1,98 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: citycare-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-citycare}
+      POSTGRES_USER: ${POSTGRES_USER:-citycare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-citycare123}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    networks:
+      - citycare-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-citycare} -d ${POSTGRES_DB:-citycare}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: citycare-backend
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-citycare}:${POSTGRES_PASSWORD:-citycare123}@postgres:5432/${POSTGRES_DB:-citycare}
+      SECRET_KEY: ${SECRET_KEY:-your-super-secret-key-change-in-production}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://frontend:3000}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend:/app
+    networks:
+      - citycare-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/api/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: citycare-frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000/api}
+      NODE_ENV: ${NODE_ENV:-production}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    networks:
+      - citycare-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # # Nginx Reverse Proxy (Optional)
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: citycare-nginx
+  #   ports:
+  #     - "${NGINX_PORT:-80}:80"
+  #     - "${NGINX_SSL_PORT:-443}:443"
+  #   volumes:
+  #     - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+  #     - ./nginx/ssl:/etc/nginx/ssl
+  #   networks:
+  #     - citycare-network
+  #   depends_on:
+  #     - frontend
+  #     - backend
+  #   restart: unless-stopped
+  #   profiles:
+  #     - production
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  citycare-network:
+    driver: bridge
