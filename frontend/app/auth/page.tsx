@@ -20,25 +20,27 @@ export default function AuthPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    
+
     try {
       const formData = new FormData(e.target as HTMLFormElement)
       const email = formData.get('email') as string
       const password = formData.get('password') as string
-      
+
       const response = await authService.login({ email, password })
-      
+
       // Store auth token
       localStorage.setItem('authToken', response.token)
-      
+      localStorage.setItem('username', response.user.firstName + ' ' + response.user.lastName)
+      localStorage.setItem('isAdmin', response.isAdmin.toString())
+      localStorage.setItem('email', response.user.email)
       toast({
         title: response.isAdmin ? "Admin login successful!" : "Login successful!",
         description: response.isAdmin ? "Welcome to CityCare Admin Panel." : "Welcome back to CityCare.",
       })
-      
+
       // Redirect based on user type
       router.push(response.isAdmin ? '/admin' : '/dashboard')
-      
+
     } catch (error: any) {
       toast({
         title: "Login failed",
@@ -53,7 +55,7 @@ export default function AuthPage() {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    
+
     try {
       const formData = new FormData(e.target as HTMLFormElement)
       const firstName = formData.get('firstName') as string
@@ -61,7 +63,7 @@ export default function AuthPage() {
       const email = formData.get('signupEmail') as string
       const password = formData.get('signupPassword') as string
       const confirmPassword = formData.get('confirmPassword') as string
-      
+
       if (password !== confirmPassword) {
         toast({
           title: "Password mismatch",
@@ -70,19 +72,22 @@ export default function AuthPage() {
         })
         return
       }
-      
+
       const response = await authService.register({ firstName, lastName, email, password })
-      
+
       // Store auth token
       localStorage.setItem('authToken', response.token)
-      
+      localStorage.setItem('username', response.user.firstName + ' ' + response.user.lastName)
+      localStorage.setItem('isAdmin', response.isAdmin.toString())
+      localStorage.setItem('email', response.user.email)
+
       toast({
         title: "Account created!",
         description: "Welcome to CityCare. You can now start reporting issues.",
       })
-      
+
       router.push('/dashboard')
-      
+
     } catch (error: any) {
       toast({
         title: "Registration failed",
@@ -120,7 +125,7 @@ export default function AuthPage() {
                 <TabsTrigger value="login">Login</TabsTrigger>
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="login">
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
@@ -143,8 +148,8 @@ export default function AuthPage() {
                       required
                     />
                   </div>
-                  <Button 
-                    type="submit" 
+                  <Button
+                    type="submit"
                     className="w-full bg-blue-600 hover:bg-blue-700"
                     disabled={isLoading}
                   >
@@ -152,7 +157,7 @@ export default function AuthPage() {
                   </Button>
                 </form>
               </TabsContent>
-              
+
               <TabsContent value="signup">
                 <form onSubmit={handleSignUp} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
@@ -205,8 +210,8 @@ export default function AuthPage() {
                       required
                     />
                   </div>
-                  <Button 
-                    type="submit" 
+                  <Button
+                    type="submit"
                     className="w-full bg-blue-600 hover:bg-blue-700"
                     disabled={isLoading}
                   >
