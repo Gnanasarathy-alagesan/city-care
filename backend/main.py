@@ -383,6 +383,42 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
         },
         "isAdmin": new_user.is_admin
     }
+class UserUpdate(BaseModel):
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    district: Optional[str] = None
+    
+@app.put("/api/user", response_model=dict)
+async def update_profile(
+    user_update: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    # Update only provided fields
+    if user_update.phone is not None:
+        user.phone = user_update.phone
+    if user_update.address is not None:
+        user.address = user_update.address
+    if user_update.district is not None:
+        user.district = user_update.district
+
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "id": user.id,
+        "firstName": user.first_name,
+        "lastName": user.last_name,
+        "email": user.email,
+        "phone": user.phone,
+        "address": user.address,
+        "district": user.district,
+        "isAdmin": user.is_admin
+    }
 
 @app.get("/api/auth/me")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
@@ -649,8 +685,8 @@ async def get_all_users(
             "id": user.id,
             "name": f"{user.first_name} {user.last_name}",
             "email": user.email,
-            "phone": user.phone or "+1 (555) 123-4567",
-            "location": user.district or "Downtown District",
+            "phone": user.phone or "NA",
+            "location": user.district or "NA",
             "joinDate": user.created_at.strftime("%Y-%m-%d"),
             "status": "Active" if user.is_active else "Inactive",
             "complaintsCount": complaints_count,

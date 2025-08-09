@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { Home, FileText, Settings, Menu, Bell, User, LogOut, Shield, BarChart3 } from 'lucide-react'
+import { ProfileDialog } from '@/components/profile-dialog'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -31,6 +32,7 @@ const adminNavigation = [
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
   const pathname = usePathname()
   const isAdmin = pathname.startsWith('/admin')
 
@@ -125,7 +127,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setProfileOpen(true)}>
                   <User className="mr-2 h-4 w-4" />
                   <span>Profile</span>
                 </DropdownMenuItem>
@@ -146,6 +148,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
           </div>
         </header>
 

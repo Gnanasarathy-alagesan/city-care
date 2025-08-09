@@ -7,12 +7,21 @@ import { Button } from '@/components/ui/button'
 import { FileText, Clock, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
 import { dashboardService } from '@/services/dashboard.service'
+import { complaintService } from '@/services/complaint.service'
 import { useToast } from '@/hooks/use-toast'
+import { formatDistanceToNow } from 'date-fns'
 
 interface DashboardStats {
   totalComplaints: number
   inProgress: number
   resolved: number
+}
+
+interface Complaint {
+  id: string
+  title: string
+  status: string
+  date: string
 }
 
 export default function DashboardPage() {
@@ -21,6 +30,7 @@ export default function DashboardPage() {
     inProgress: 0,
     resolved: 0
   })
+  const [complaints, setComplaints] = useState<Complaint[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
 
@@ -29,6 +39,13 @@ export default function DashboardPage() {
       try {
         const dashboardStats = await dashboardService.getDashboardStats()
         setStats(dashboardStats)
+
+        const res = await complaintService.getComplaints()
+        const sorted = (res.complaints || []).sort(
+          (a: Complaint, b: Complaint) =>
+            new Date(a.date).getTime() - new Date(b.date).getTime()
+        )
+        setComplaints(sorted)
       } catch (error: any) {
         toast({
           title: "Error loading dashboard",
@@ -66,6 +83,26 @@ export default function DashboardPage() {
       bgColor: "bg-green-100"
     }
   ]
+
+  const getStatusDotColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'resolved':
+        return 'bg-green-500'
+      case 'in progress':
+        return 'bg-amber-500'
+      case 'open':
+        return 'bg-blue-500'
+      default:
+        return 'bg-gray-400'
+    }
+  }
+
+  const toTitleCase = (str: string) =>
+    str
+      .toLowerCase()
+      .split(' ')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
 
   if (isLoading) {
     return (
@@ -114,7 +151,7 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* Quick Actions */}
+        {/* Quick Actions + Recent Activity */}
         <div className="grid md:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
@@ -149,29 +186,25 @@ export default function DashboardPage() {
               <CardDescription>Your latest complaint updates</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">Pothole on Main Street resolved</p>
-                    <p className="text-xs text-gray-500">2 hours ago</p>
-                  </div>
+              {complaints.length === 0 ? (
+                <p className="text-sm text-gray-500">No recent complaints found.</p>
+              ) : (
+                <div className="space-y-4">
+                  {complaints.map((c) => (
+                    <div key={c.id} className="flex items-center space-x-3">
+                      <div className={`w-2 h-2 ${getStatusDotColor(c.status)} rounded-full`}></div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">
+                          {toTitleCase(c.title) || 'Complaint'} {c.status.toLowerCase() === 'resolved' ? 'Resolved' : c.status.toLowerCase() === 'in progress' ? 'In Progress' : 'Submitted'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {formatDistanceToNow(new Date(c.date), { addSuffix: true })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">Street light repair in progress</p>
-                    <p className="text-xs text-gray-500">1 day ago</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">Water leak complaint submitted</p>
-                    <p className="text-xs text-gray-500">3 days ago</p>
-                  </div>
-                </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </div>

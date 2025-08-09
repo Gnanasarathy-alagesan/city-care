@@ -1,60 +1,32 @@
+'use client';
+
+import { useEffect, useState } from 'react'
+import { complaintService } from '@/services/complaint.service'
 import { DashboardLayout } from '@/components/dashboard-layout'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Eye, Search, Filter } from 'lucide-react'
+import { Eye, Filter } from 'lucide-react'
 import Link from 'next/link'
 
 export default function ComplaintsPage() {
-  const complaints = [
-    {
-      id: 'CC-001',
-      title: 'Pothole on Main Street',
-      service: 'Roads & Infrastructure',
-      status: 'In Progress',
-      priority: 'High',
-      date: '2024-01-15',
-      description: 'Large pothole causing traffic issues'
-    },
-    {
-      id: 'CC-002',
-      title: 'Street light not working',
-      service: 'Electricity',
-      status: 'Open',
-      priority: 'Medium',
-      date: '2024-01-14',
-      description: 'Street light on Oak Avenue has been out for 3 days'
-    },
-    {
-      id: 'CC-003',
-      title: 'Water leak on sidewalk',
-      service: 'Water Supply',
-      status: 'Resolved',
-      priority: 'High',
-      date: '2024-01-12',
-      description: 'Water leak causing flooding on sidewalk'
-    },
-    {
-      id: 'CC-004',
-      title: 'Garbage not collected',
-      service: 'Waste Management',
-      status: 'Open',
-      priority: 'Low',
-      date: '2024-01-10',
-      description: 'Garbage bins not collected for 2 weeks'
-    },
-    {
-      id: 'CC-005',
-      title: 'Broken playground equipment',
-      service: 'Parks & Recreation',
-      status: 'In Progress',
-      priority: 'Medium',
-      date: '2024-01-08',
-      description: 'Swing set broken at Central Park'
+  const [complaints, setComplaints] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchComplaints = async () => {
+      try {
+        const response = await complaintService.getComplaints()
+        // API returns { complaints: [...], total, page }
+        setComplaints(response?.complaints || [])
+      } catch (err) {
+        console.error('Failed to fetch complaints', err)
+      } finally {
+        setLoading(false)
+      }
     }
-  ]
+    fetchComplaints()
+  }, [])
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -97,48 +69,11 @@ export default function ComplaintsPage() {
           </Link>
         </div>
 
-        {/* Filters */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Input
-                    placeholder="Search complaints..."
-                    className="pl-10"
-                  />
-                </div>
-              </div>
-              <Select>
-                <SelectTrigger className="w-full md:w-48">
-                  <SelectValue placeholder="Filter by status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="in-progress">In Progress</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select>
-                <SelectTrigger className="w-full md:w-48">
-                  <SelectValue placeholder="Filter by priority" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Priority</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Complaints List */}
-        <div className="space-y-4">
-          {complaints.map((complaint) => (
+        {loading ? (
+          <p>Loading complaints...</p>
+        ) : complaints.length > 0 ? (
+          complaints.map((complaint) => (
             <Card key={complaint.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-6">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -171,10 +106,8 @@ export default function ComplaintsPage() {
                 </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
-
-        {complaints.length === 0 && (
+          ))
+        ) : (
           <Card>
             <CardContent className="p-12 text-center">
               <div className="text-gray-400 mb-4">
