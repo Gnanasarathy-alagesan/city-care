@@ -4,7 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 import uvicorn
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 import jwt
 from passlib.context import CryptContext
@@ -16,6 +16,16 @@ from sqlalchemy.orm import sessionmaker, Session, relationship
 from sqlalchemy.dialects.postgresql import UUID
 import json
 from pathlib import Path
+from datetime import datetime, timedelta
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from sqlalchemy.orm import joinedload
+from auth import get_current_user, get_admin_user
+
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -189,9 +199,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -202,34 +212,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise credentials_exception
-        token_data = TokenData(email=email)
-    except jwt.PyJWTError:
-        raise credentials_exception
-    
-    user = db.query(User).filter(User.email == token_data.email).first()
-    if user is None:
-        raise credentials_exception
-    return user
-
-async def get_admin_user(current_user: User = Depends(get_current_user)):
-    if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-    return current_user
 
 # Initialize default data
 def init_default_data(db: Session):
@@ -328,7 +310,7 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     )
     
     # Update last active
-    user.last_active = datetime.utcnow()
+    user.last_active = datetime.now(timezone.utc)
     db.commit()
     
     return {
@@ -437,6 +419,7 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
 async def logout():
     return {"message": "Successfully logged out"}
 
+
 # Dashboard endpoints
 @app.get("/api/dashboard/stats")
 async def get_dashboard_stats(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -457,18 +440,22 @@ async def get_dashboard_stats(current_user: User = Depends(get_current_user), db
     }
 
 # Complaint endpoints
-@app.get("/api/complaints")
-async def get_complaints(
+@app.get("/api/admin/complaints")
+async def get_admin_complaints(
     page: int = 1,
     limit: int = 10,
     search: Optional[str] = None,
     status: Optional[str] = None,
     priority: Optional[str] = None,
     service: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_admin_user)
 ):
-    query = db.query(Complaint).filter(Complaint.reporter_id == current_user.id)
+    query = db.query(Complaint).options(
+        joinedload(Complaint.status_history),
+        joinedload(Complaint.reporter),   # eager load reporter
+        joinedload(Complaint.images)      # eager load images
+    )
     
     if search:
         query = query.filter(Complaint.title.contains(search))
@@ -480,10 +467,22 @@ async def get_complaints(
         query = query.filter(Complaint.service_type == service)
     
     total = query.count()
-    complaints = query.offset((page - 1) * limit).limit(limit).all()
+    complaints = (
+        query
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
     
     complaint_list = []
     for complaint in complaints:
+        # Sort history by created_at DESC
+        sorted_history: list[ComplaintStatusHistory] = sorted(
+            complaint.status_history,
+            key=lambda h: h.created_at,
+            reverse=True
+        )
+        
         complaint_list.append({
             "id": complaint.id,
             "title": complaint.title,
@@ -496,7 +495,21 @@ async def get_complaints(
                 "address": complaint.location_address,
                 "lat": complaint.location_lat,
                 "lng": complaint.location_lng
-            } if complaint.location_address else None
+            } if complaint.location_address else None,
+            "reporter": {
+                "name": f"{complaint.reporter.first_name} {complaint.reporter.last_name}",
+                "email": complaint.reporter.email
+            } if complaint.reporter else None,
+            "images": [img.image_url for img in complaint.images],
+            "history": [
+                {
+                    "status": hist.status,
+                    "note": hist.note,
+                    "updated_by": hist.updated_by,
+                    "date": hist.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                }
+                for hist in sorted_history
+            ]
         })
     
     return {
@@ -504,6 +517,7 @@ async def get_complaints(
         "total": total,
         "page": page
     }
+
 
 @app.get("/api/complaints/{complaint_id}")
 async def get_complaint(complaint_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -631,24 +645,115 @@ async def create_complaint(
 # Admin endpoints
 @app.get("/api/admin/dashboard/stats")
 async def get_admin_dashboard_stats(admin_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
-    total_complaints = db.query(Complaint).count()
-    in_progress = db.query(Complaint).filter(Complaint.status == "In Progress").count()
-    resolved_today = db.query(Complaint).filter(
-        Complaint.status == "Resolved",
-        Complaint.updated_at >= datetime.utcnow().date()
+    now = datetime.now(timezone.utc)
+    week_start = now - timedelta(days=7)
+    prev_week_start = now - timedelta(days=14)
+
+    # Current week counts
+    total_complaints = db.query(Complaint).filter(
+        Complaint.created_at >= week_start
     ).count()
-    high_priority = db.query(Complaint).filter(Complaint.priority == "High").count()
-    
+
+    in_progress = db.query(Complaint).filter(
+        Complaint.status == "In Progress"
+    ).count()
+
+    resolved = db.query(Complaint).filter(
+        Complaint.status == "Resolved"
+    ).count()
+
+    high_priority = db.query(Complaint).filter(
+        Complaint.priority == "High",
+        Complaint.status in ("In Progress", "Open")
+    ).count()
+
+    # Previous week counts
+    prev_total = db.query(Complaint).filter(
+        Complaint.created_at >= prev_week_start,
+        Complaint.created_at < week_start
+    ).count()
+
+    prev_in_progress = db.query(Complaint).filter(
+        Complaint.status == "In Progress",
+        Complaint.created_at >= prev_week_start,
+        Complaint.created_at < week_start
+    ).count()
+
+    prev_resolved = db.query(Complaint).filter(
+        Complaint.status == "Resolved",
+        Complaint.created_at >= prev_week_start,
+        Complaint.created_at < week_start
+    ).count()
+
+    prev_high_priority = db.query(Complaint).filter(
+        Complaint.priority == "High",
+        Complaint.created_at >= prev_week_start,
+        Complaint.created_at < week_start
+    ).count()
+
+    def calc_percent_change(current, previous):
+        if previous == 0:
+            return None
+        return round(((current - previous) / previous) * 100, 2)
+
     return {
         "totalComplaints": total_complaints,
+        "totalComplaintsChange": calc_percent_change(total_complaints, prev_total),
         "inProgress": in_progress,
-        "resolvedToday": resolved_today,
+        "inProgressChange": calc_percent_change(in_progress, prev_in_progress),
+        "resolved": resolved,
+        "resolvedChange": calc_percent_change(resolved, prev_resolved),
         "highPriority": high_priority,
-        "trends": [
-            {"category": "Roads", "change": "+25%", "direction": "up"},
-            {"category": "Water", "change": "+40%", "direction": "up"},
-            {"category": "Electricity", "change": "-12%", "direction": "down"}
-        ]
+        "highPriorityChange": calc_percent_change(high_priority, prev_high_priority),
+    }
+
+# Complaint endpoints
+@app.get("/api/admin/complaints")
+async def get_admin_complaints(
+    page: int = 1,
+    limit: int = 10,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    priority: Optional[str] = None,
+    service: Optional[str] = None,
+    db: Session = Depends(get_db),
+    # admin_user: User = Depends(get_admin_user)
+):
+    query = db.query(Complaint)
+    
+    if search:
+        query = query.filter(Complaint.title.contains(search))
+    if status and status != "all":
+        query = query.filter(Complaint.status == status.replace("-", " ").title())
+    if priority and priority != "all":
+        query = query.filter(Complaint.priority == priority.title())
+    if service and service != "all":
+        query = query.filter(Complaint.service_type == service)
+    
+    total = query.count()
+    complaints = query.offset((page - 1) * limit).limit(limit).all()
+    
+    complaint_list = []
+    for complaint in complaints:
+        complaint_list.append({
+            "id": complaint.id,
+            "title": complaint.title,
+            "description": complaint.description,
+            "service": complaint.service_type,
+            "status": complaint.status,
+            "priority": complaint.priority,
+            "date": complaint.created_at.strftime("%Y-%m-%d"),
+            "location": {
+                "address": complaint.location_address,
+                "lat": complaint.location_lat,
+                "lng": complaint.location_lng
+            } if complaint.location_address else None
+        })
+    
+    return {
+        "complaints": complaint_list,
+        "total": total,
+        "page": page
     }
 
 @app.get("/api/admin/users")
@@ -780,7 +885,7 @@ async def upload_files(files: List[UploadFile] = File(...), current_user: User =
 # Health check endpoint
 @app.get("/api/health")
 async def health_check():
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

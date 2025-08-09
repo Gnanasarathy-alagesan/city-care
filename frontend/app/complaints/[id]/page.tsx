@@ -1,3 +1,6 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -6,55 +9,67 @@ import { Separator } from '@/components/ui/separator'
 import { MapPin, Calendar, User, FileText, Camera, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { adminService } from '@/services/admin.service'
 
 export default function ComplaintDetailPage({ params }: { params: { id: string } }) {
-  // Mock data - in real app, fetch based on params.id
-  const complaint = {
-    id: params.id,
-    title: 'Pothole on Main Street',
-    description: 'There is a large pothole on Main Street near the intersection with Oak Avenue. It\'s causing damage to vehicles and creating a safety hazard for drivers. The pothole is approximately 2 feet wide and 6 inches deep.',
-    service: 'Roads & Infrastructure',
-    status: 'In Progress',
-    priority: 'High',
-    date: '2024-01-15',
-    location: {
-      address: '123 Main Street, Downtown',
-      coordinates: { lat: 40.7128, lng: -74.0060 }
-    },
-    reporter: {
-      name: 'John Doe',
-      email: 'john.doe@email.com'
-    },
-    assignedTo: 'Road Maintenance Team A',
-    estimatedResolution: '2024-01-20',
-    images: [
-      '/street-pothole.png',
-      '/damaged-road-close-up.png'
-    ],
-    aiSuggestion: {
-      priority: 'High',
-      reasoning: 'Based on the description and location, this issue poses a significant safety risk and should be prioritized.',
-      estimatedCost: '$500 - $800',
-      recommendedAction: 'Immediate temporary patching followed by permanent repair within 5 business days.'
-    },
-    statusHistory: [
-      {
-        status: 'Submitted',
-        date: '2024-01-15 09:00 AM',
-        note: 'Complaint submitted by citizen'
-      },
-      {
-        status: 'Under Review',
-        date: '2024-01-15 11:30 AM',
-        note: 'Assigned to Road Maintenance Team A for assessment'
-      },
-      {
-        status: 'In Progress',
-        date: '2024-01-16 08:00 AM',
-        note: 'Team dispatched to location for temporary repair'
+  const [backUrl, setBackUrl] = useState('/complaints')
+  const [complaint, setComplaint] = useState<any | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const isAdmin = localStorage.getItem('isAdmin')
+    if (isAdmin === 'true') {
+      setBackUrl('/admin/complaints')
+    }
+  }, [])
+
+  useEffect(() => {
+    const fetchComplaint = async () => {
+      try {
+        const res = await adminService.getComplaints({
+          page: 1,
+          limit: 100 // fetch enough so we can find this one
+        })
+
+        const found = res.complaints.find((c: any) => String(c.id) === params.id)
+
+        if (found) {
+          // Map API format → UI format
+          setComplaint({
+            id: found.id,
+            title: found.title,
+            description: found.description,
+            service: found.service,
+            status: found.status,
+            priority: found.priority,
+            date: found.date,
+            location: found.location || { address: '', coordinates: {} },
+            reporter: found.reporter, // not provided by API yet
+            assignedTo: found.assignedTo || 'N/A',
+            estimatedResolution: 'N/A', // placeholder
+            images: [], // no images yet
+            aiSuggestion: {
+              priority: 'Medium',
+              reasoning: 'AI analytics not available yet — placeholder.',
+              estimatedCost: 'N/A',
+              recommendedAction: 'N/A'
+            },
+            statusHistory: found.history.map((h: any) => ({
+              status: h.status,
+              date: h.date,
+              note: h.note
+            }))
+          })
+        }
+      } catch (err) {
+        console.error('Error fetching complaint detail:', err)
+      } finally {
+        setLoading(false)
       }
-    ]
-  }
+    }
+
+    fetchComplaint()
+  }, [params.id])
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -82,11 +97,26 @@ export default function ComplaintDetailPage({ params }: { params: { id: string }
     }
   }
 
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <p>Loading...</p>
+      </DashboardLayout>
+    )
+  }
+
+  if (!complaint) {
+    return (
+      <DashboardLayout>
+        <p>Complaint not found.</p>
+      </DashboardLayout>
+    )
+  }
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Link href="/complaints">
+          <Link href={backUrl}>
             <Button variant="outline" size="sm">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Complaints
@@ -230,23 +260,7 @@ export default function ComplaintDetailPage({ params }: { params: { id: string }
                 </div>
               </CardContent>
             </Card>
-
-            {/* Location Map */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Location</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="aspect-video bg-gray-100 rounded-lg flex items-center justify-center mb-4">
-                  <div className="text-center text-gray-500">
-                    <MapPin className="w-8 h-8 mx-auto mb-2" />
-                    <p className="text-sm">Map View</p>
-                    <p className="text-xs">Interactive map would be here</p>
-                  </div>
-                </div>
-                <p className="text-sm text-gray-700">{complaint.location.address}</p>
-              </CardContent>
-            </Card>
+          
 
             {/* Reporter Info */}
             <Card>

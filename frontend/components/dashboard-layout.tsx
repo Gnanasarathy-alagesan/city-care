@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { Home, FileText, Settings, Menu, Bell, User, LogOut, Shield, BarChart3 } from 'lucide-react'
@@ -34,7 +34,17 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const pathname = usePathname()
-  const isAdmin = pathname.startsWith('/admin')
+  const [isAdmin, setIsAdmin] = useState<string | null>(null)
+
+  useEffect(() => {
+    const stored = localStorage.getItem('isAdmin')
+    setIsAdmin(stored)
+  }, [])
+
+  if (isAdmin === null) {
+    // Optional: Loading state while we check
+    return <div>Loading...</div>
+  }
 
   // Show only admin navigation for admin users, regular navigation for regular users
   const currentNavigation = isAdmin ? adminNavigation : navigation

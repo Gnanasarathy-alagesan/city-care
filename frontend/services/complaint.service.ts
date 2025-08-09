@@ -17,7 +17,7 @@ export interface Complaint {
   title: string
   description: string
   serviceType: string
-  status: 'Open' | 'In Progress' | 'Resolved'
+  status: 'Open' | 'Under Review' | 'In Progress' | 'Resolved'
   priority: 'Low' | 'Medium' | 'High'
   location?: {
     lat: number

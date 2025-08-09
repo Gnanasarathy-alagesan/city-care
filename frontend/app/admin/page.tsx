@@ -1,3 +1,5 @@
+'use client'
+import { useEffect, useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -5,92 +7,85 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { FileText, Clock, CheckCircle, AlertTriangle, MapPin, Search, Filter, Users, Bot, TrendingUp } from 'lucide-react'
+import { FileText, Clock, CheckCircle, AlertTriangle, MapPin, Search, Bot, TrendingUp, Users } from 'lucide-react'
+import { adminService, AdminStats } from '@/services/admin.service'
 
 export default function AdminDashboardPage() {
+  const [statsinfo, setStatsinfo] = useState<AdminStats>()
+  const [complaints, setComplaints] = useState<any[]>([])
+
+  // Filters
+  const [searchText, setSearchText] = useState('')
+  const [serviceFilter, setServiceFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [priorityFilter, setPriorityFilter] = useState('all')
+
+  const fetchStats = async () => {
+    try {
+      const res = await adminService.getDashboardStats()
+      setStatsinfo(res || [])
+    } catch (err) {
+      console.error('Error fetching stats:', err)
+    }
+  }
+
+  const fetchComplaints = async () => {
+    try {
+      const res = await adminService.getComplaints({
+        page: 1,
+        limit: 10,
+        service: serviceFilter !== 'all' ? serviceFilter : undefined,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        priority: priorityFilter !== 'all' ? priorityFilter : undefined,
+        search: searchText || undefined
+      })
+      setComplaints(res.complaints || [])
+    } catch (err) {
+      console.error('Error fetching complaints:', err)
+    }
+  }
+
+  useEffect(() => {
+    fetchStats()
+  }, [])
+
+  // Refetch when filters change
+  useEffect(() => {
+    fetchComplaints()
+  }, [serviceFilter, statusFilter, priorityFilter, searchText])
+
   const stats = [
     {
       title: "Total Complaints",
-      value: "247",
-      change: "+12%",
+      value: statsinfo?.totalComplaints,
+      change: statsinfo?.totalComplaintsChange,
       icon: FileText,
       color: "text-blue-600",
       bgColor: "bg-blue-100"
     },
     {
       title: "In Progress",
-      value: "89",
-      change: "+5%",
+      value: statsinfo?.inProgress,
+      change: statsinfo?.inProgressChange,
       icon: Clock,
       color: "text-amber-600",
       bgColor: "bg-amber-100"
     },
     {
       title: "Resolved Today",
-      value: "23",
-      change: "+18%",
+      value: statsinfo?.resolved,
+      change: statsinfo?.resolvedChange,
       icon: CheckCircle,
       color: "text-green-600",
       bgColor: "bg-green-100"
     },
     {
       title: "High Priority",
-      value: "15",
-      change: "-8%",
+      value: statsinfo?.highPriority,
+      change: statsinfo?.highPriorityChange,
       icon: AlertTriangle,
       color: "text-red-600",
       bgColor: "bg-red-100"
-    }
-  ]
-
-  const complaints = [
-    {
-      id: 'CC-001',
-      title: 'Pothole on Main Street',
-      service: 'Roads',
-      status: 'In Progress',
-      priority: 'High',
-      date: '2024-01-15',
-      location: 'Main St & Oak Ave',
-      assignedTo: 'Team A'
-    },
-    {
-      id: 'CC-002',
-      title: 'Street light not working',
-      service: 'Electricity',
-      status: 'Open',
-      priority: 'Medium',
-      date: '2024-01-14',
-      location: 'Oak Avenue',
-      assignedTo: 'Unassigned'
-    },
-    {
-      id: 'CC-003',
-      title: 'Water leak on sidewalk',
-      service: 'Water',
-      status: 'Resolved',
-      priority: 'High',
-      date: '2024-01-12',
-      location: 'Pine Street',
-      assignedTo: 'Team B'
-    }
-  ]
-
-  const aiSuggestions = [
-    {
-      type: 'Priority',
-      suggestion: 'Complaint CC-045 should be upgraded to High priority due to safety concerns',
-      confidence: '92%'
-    },
-    {
-      type: 'Resource',
-      suggestion: 'Deploy additional team to Downtown area - 8 complaints in 2-block radius',
-      confidence: '87%'
-    },
-    {
-      type: 'Pattern',
-      suggestion: 'Water-related complaints increased 40% this week - possible infrastructure issue',
-      confidence: '94%'
     }
   ]
 
@@ -137,7 +132,9 @@ export default function AdminDashboardPage() {
                   <div>
                     <p className="text-sm font-medium text-gray-600">{stat.title}</p>
                     <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
-                    <p className="text-sm text-green-600">{stat.change} from last week</p>
+                    {stat.change !== undefined && stat.change !== null && (
+                      <p className="text-sm text-green-600">{stat.change} from last week</p>
+                    )}
                   </div>
                   <div className={`w-12 h-12 ${stat.bgColor} rounded-lg flex items-center justify-center`}>
                     <stat.icon className={`w-6 h-6 ${stat.color}`} />
@@ -162,14 +159,15 @@ export default function AdminDashboardPage() {
                 <div className="flex flex-col md:flex-row gap-4">
                   <div className="flex-1">
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                       <Input
                         placeholder="Search complaints..."
+                        value={searchText}
+                        onChange={(e) => setSearchText(e.target.value)}
                         className="pl-10"
                       />
                     </div>
                   </div>
-                  <Select>
+                  <Select value={serviceFilter} onValueChange={setServiceFilter}>
                     <SelectTrigger className="w-full md:w-48">
                       <SelectValue placeholder="Filter by service" />
                     </SelectTrigger>
@@ -181,26 +179,26 @@ export default function AdminDashboardPage() {
                       <SelectItem value="waste">Waste</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Select>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
                     <SelectTrigger className="w-full md:w-48">
                       <SelectValue placeholder="Filter by status" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Status</SelectItem>
-                      <SelectItem value="open">Open</SelectItem>
-                      <SelectItem value="in-progress">In Progress</SelectItem>
-                      <SelectItem value="resolved">Resolved</SelectItem>
+                      <SelectItem value="Open">Open</SelectItem>
+                      <SelectItem value="In Progress">In Progress</SelectItem>
+                      <SelectItem value="Resolved">Resolved</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Select>
+                  <Select value={priorityFilter} onValueChange={setPriorityFilter}>
                     <SelectTrigger className="w-full md:w-48">
                       <SelectValue placeholder="Filter by priority" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Priority</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="Low">Low</SelectItem>
+                      <SelectItem value="Medium">Medium</SelectItem>
+                      <SelectItem value="High">High</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -226,7 +224,7 @@ export default function AdminDashboardPage() {
                         <div>{getStatusBadge(complaint.status)}</div>
                         <div>{getPriorityBadge(complaint.priority)}</div>
                         <div className="text-sm text-gray-600">{complaint.location}</div>
-                        <div className="text-sm text-gray-600">{complaint.assignedTo}</div>
+                        <div className="text-sm text-gray-600">{complaint?.assignedTo ?? 'NA'}</div>
                       </div>
                       <div className="flex gap-2">
                         <Button variant="outline" size="sm">
@@ -241,112 +239,6 @@ export default function AdminDashboardPage() {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="map" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5" />
-                  Complaint Locations
-                </CardTitle>
-                <CardDescription>Interactive map showing complaint locations across the city</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="aspect-video bg-gray-100 rounded-lg flex items-center justify-center">
-                  <div className="text-center text-gray-500">
-                    <MapPin className="w-12 h-12 mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">Interactive Map</h3>
-                    <p className="text-sm">Map integration would display complaint locations with clustering and filtering</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="ai" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Bot className="w-5 h-5" />
-                  AI-Powered Insights
-                </CardTitle>
-                <CardDescription>IBM AI recommendations for complaint management</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {aiSuggestions.map((suggestion, index) => (
-                    <div key={index} className="p-4 border rounded-lg bg-blue-50">
-                      <div className="flex justify-between items-start mb-2">
-                        <Badge variant="outline">{suggestion.type}</Badge>
-                        <span className="text-sm text-gray-600">Confidence: {suggestion.confidence}</span>
-                      </div>
-                      <p className="text-gray-700">{suggestion.suggestion}</p>
-                      <div className="flex gap-2 mt-3">
-                        <Button size="sm" variant="outline">
-                          Apply
-                        </Button>
-                        <Button size="sm" variant="ghost">
-                          Dismiss
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="grid md:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5" />
-                    Trends Analysis
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Roads complaints</span>
-                      <span className="text-sm font-semibold text-red-600">↑ 25%</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Water complaints</span>
-                      <span className="text-sm font-semibold text-red-600">↑ 40%</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Electricity complaints</span>
-                      <span className="text-sm font-semibold text-green-600">↓ 12%</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="w-5 h-5" />
-                    Resource Allocation
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Team A (Roads)</span>
-                      <span className="text-sm font-semibold">12 active</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Team B (Water)</span>
-                      <span className="text-sm font-semibold">8 active</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Team C (Electrical)</span>
-                      <span className="text-sm font-semibold">5 active</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
           </TabsContent>
         </Tabs>
       </div>

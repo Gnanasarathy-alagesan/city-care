@@ -2,14 +2,13 @@ import api from '@/lib/api'
 
 export interface AdminStats {
   totalComplaints: number
+  totalComplaintsChange: number | null
   inProgress: number
-  resolvedToday: number
+  inProgressChange: number | null
+  resolved: number
+  resolvedChange: number | null
   highPriority: number
-  trends: Array<{
-    category: string
-    change: string
-    direction: 'up' | 'down'
-  }>
+  highPriorityChange: number | null
 }
 
 export interface User {
@@ -34,6 +33,15 @@ export interface UserFilters {
   district?: string
 }
 
+export interface ComplaintFilters {
+  page?: number
+  limit?: number
+  search?: string
+  status?: string
+  priority?: string
+  service?: string
+}
+
 export const adminService = {
   // Get admin dashboard stats
   getDashboardStats: async (): Promise<AdminStats> => {
@@ -44,6 +52,12 @@ export const adminService = {
   // Get all users (admin only)
   getUsers: async (filters: UserFilters = {}) => {
     const response = await api.get('/admin/users', { params: filters })
+    return response.data
+  },
+
+  // Get all complaints (admin only)
+  getComplaints: async (filters: ComplaintFilters = {}) => {
+    const response = await api.get('/admin/complaints', { params: filters })
     return response.data
   },
 
