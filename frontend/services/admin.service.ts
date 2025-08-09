@@ -51,7 +51,7 @@ const createAdminApi = () => {
   
   // Add API key to headers for admin requests
   adminApi.interceptors.request.use((config) => {
-    config.headers['admin-api-key'] = ADMIN_API_KEY
+    config.headers.Authorization = `Bearer ${ADMIN_API_KEY}`
     return config
   })
   

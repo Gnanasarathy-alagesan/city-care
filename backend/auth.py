@@ -15,6 +15,7 @@ load_dotenv('.env.local')
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+bearer_scheme = HTTPBearer()
 
 # API Key for admin access
 ADMIN_API_KEYS = os.getenv("ADMIN_API_KEYS").split(",")
@@ -71,12 +72,14 @@ async def get_admin_user(current_user: User = Depends(get_current_user)):
 
 # Alternative admin authentication that accepts both API key and bearer token
 async def get_admin_access(
-    admin_api_key: Optional[str] = Header(None, alias="admin-api-key"),
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
 ):
-    if admin_api_key and admin_api_key in ADMIN_API_KEYS:
-        return {"type": "api_key", "is_admin": True}
-        
+    token = credentials.credentials
+    
+    if token in ADMIN_API_KEYS:
+        return {"type": "bearer", "is_admin": True}
+    
     raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid API Key"
-            )
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid Bearer Token"
+    )

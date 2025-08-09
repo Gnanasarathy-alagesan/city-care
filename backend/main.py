@@ -288,6 +288,12 @@ def startup_event():
     init_default_data(db)
     db.close()
 
+
+@app.get("/api")
+def read_root():
+    return {"message": "API is running"}
+
+
 # Authentication endpoints
 @app.post("/api/auth/login", response_model=dict)
 async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
@@ -709,7 +715,7 @@ async def get_admin_dashboard_stats(admin_access = Depends(get_admin_access), db
 
 # Complaint endpoints
 @app.get("/api/complaints")
-async def get_admin_complaints(
+async def get_complaints(
     page: int = 1,
     limit: int = 10,
     search: Optional[str] = None,
@@ -827,73 +833,84 @@ async def get_ai_suggestions(request: dict, current_user: User = Depends(get_cur
         "confidence": 0.85
     }
 
+
 @app.post("/api/admin/complaint")
 async def admin_create_complaint(
     title: str = Form(...),
     description: str = Form(...),
-    serviceType: str = Form(...),
+    service_type: str = Form(...),
     location: Optional[str] = Form(None),
     images: List[UploadFile] = File(default=[]),
-    user_email: Optional[str] = Form(None),
+    user_email: str = Form(...),
     db: Session = Depends(get_db),
     admin_access = Depends(get_admin_access)
 ):
-    # Parse location if provided
+    # Parse location JSON if provided
     location_data = None
     if location:
         try:
             location_data = json.loads(location)
-        except:
-            pass
-    user = db.query(User).filter( User.email == user_email)
-    # Create complaint
-    new_complaint = Complaint(
-        title=title,
-        description=description,
-        service_type=serviceType,
-        reporter_id=user.id,
-        location_lat=location_data.get("lat") if location_data else None,
-        location_lng=location_data.get("lng") if location_data else None,
-        location_address=location_data.get("address") if location_data else None
-    )
-    
-    db.add(new_complaint)
-    db.commit()
-    db.refresh(new_complaint)
-    
-    # Add initial status history
-    status_history = ComplaintStatusHistory(
-        complaint_id=new_complaint.id,
-        status="Open",
-        note="Complaint submitted by citizen",
-        updated_by=f"{user.first_name} {user.last_name}"
-    )
-    db.add(status_history)
-    
-    # Handle image uploads (mock - in production, save to cloud storage)
-    image_urls = []
-    for image in images:
-        if image.filename:
-            # Mock image URL - in production, upload to cloud storage
-            image_url = f"/uploads/{new_complaint.id}_{image.filename}"
-            image_urls.append(image_url)
-            
-            complaint_image = ComplaintImage(
-                complaint_id=new_complaint.id,
-                image_url=image_url
-            )
-            db.add(complaint_image)
-    
-    db.commit()
-    
-    return {
-        "complaint": {
-            "id": new_complaint.id,
-            "title": new_complaint.title,
-            "status": new_complaint.status,
-            "images": image_urls
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid location format. Must be valid JSON.")
+
+    # Fetch user by email
+    user = None
+    if user_email:
+        user = db.query(User).filter(User.email == user_email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found.")
+
+    try:
+        # Create complaint
+        new_complaint = Complaint(
+            title=title,
+            description=description,
+            service_type=service_type,
+            reporter_id=user.id,
+            location_lat=location_data.get("lat") if location_data else None,
+            location_lng=location_data.get("lng") if location_data else None,
+            location_address=location_data.get("address") if location_data else None
+        )
+        db.add(new_complaint)
+        db.commit()
+        db.refresh(new_complaint)
+
+        # Add initial status history
+        status_history = ComplaintStatusHistory(
+            complaint_id=new_complaint.id,
+            status="Open",
+            note="Complaint submitted by citizen",
+            updated_by=f"{user.first_name} {user.last_name}" if user else "Admin"
+        )
+        db.add(status_history)
+
+        # Handle image uploads
+        image_urls = []
+        for image in images:
+            if image.filename:
+                image_url = f"/uploads/{new_complaint.id}_{image.filename}"
+                image_urls.append(image_url)
+                complaint_image = ComplaintImage(
+                    complaint_id=new_complaint.id,
+                    image_url=image_url
+                )
+                db.add(complaint_image)
+
+        db.commit()
+
+        return {
+            "complaint": {
+                "id": new_complaint.id,
+                "title": new_complaint.title,
+                "status": new_complaint.status,
+                "images": image_urls
+            }
         }
-    }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
 
 # Geocoding endpoint
 @app.post("/api/geocode")
