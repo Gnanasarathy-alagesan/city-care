@@ -45,9 +45,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     // Optional: Loading state while we check
     return <div>Loading...</div>
   }
-
+  console.log('isAdmin:', isAdmin)
   // Show only admin navigation for admin users, regular navigation for regular users
-  const currentNavigation = isAdmin ? adminNavigation : navigation
+  const currentNavigation = isAdmin==="true" ? adminNavigation : navigation
+  console.log('currentNavigation:', currentNavigation)
 
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
     <div className={`flex flex-col h-full ${mobile ? 'w-full' : 'w-64'} bg-white border-r border-gray-200`}>

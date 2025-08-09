@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import joinedload
-from auth import get_current_user, get_admin_user
+from auth import get_current_user, get_admin_access
 
 import logging
 
@@ -449,7 +449,7 @@ async def get_admin_complaints(
     priority: Optional[str] = None,
     service: Optional[str] = None,
     db: Session = Depends(get_db),
-    admin_user: User = Depends(get_admin_user)
+    admin_access = Depends(get_admin_access)
 ):
     query = db.query(Complaint).options(
         joinedload(Complaint.status_history),
@@ -644,7 +644,7 @@ async def create_complaint(
 
 # Admin endpoints
 @app.get("/api/admin/dashboard/stats")
-async def get_admin_dashboard_stats(admin_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+async def get_admin_dashboard_stats(admin_access = Depends(get_admin_access), db: Session = Depends(get_db)):
     now = datetime.now(timezone.utc)
     week_start = now - timedelta(days=7)
     prev_week_start = now - timedelta(days=14)
@@ -708,7 +708,7 @@ async def get_admin_dashboard_stats(admin_user: User = Depends(get_admin_user), 
     }
 
 # Complaint endpoints
-@app.get("/api/admin/complaints")
+@app.get("/api/complaints")
 async def get_admin_complaints(
     page: int = 1,
     limit: int = 10,
@@ -717,7 +717,6 @@ async def get_admin_complaints(
     priority: Optional[str] = None,
     service: Optional[str] = None,
     db: Session = Depends(get_db),
-    # admin_user: User = Depends(get_admin_user)
 ):
     query = db.query(Complaint)
     
@@ -763,8 +762,8 @@ async def get_all_users(
     search: Optional[str] = None,
     status: Optional[str] = None,
     district: Optional[str] = None,
-    admin_user: User = Depends(get_admin_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin_access = Depends(get_admin_access)
 ):
     query = db.query(User).filter(User.is_admin == False)
     
@@ -828,6 +827,74 @@ async def get_ai_suggestions(request: dict, current_user: User = Depends(get_cur
         "confidence": 0.85
     }
 
+@app.post("/api/admin/complaint")
+async def admin_create_complaint(
+    title: str = Form(...),
+    description: str = Form(...),
+    serviceType: str = Form(...),
+    location: Optional[str] = Form(None),
+    images: List[UploadFile] = File(default=[]),
+    user_email: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    admin_access = Depends(get_admin_access)
+):
+    # Parse location if provided
+    location_data = None
+    if location:
+        try:
+            location_data = json.loads(location)
+        except:
+            pass
+    user = db.query(User).filter( User.email == user_email)
+    # Create complaint
+    new_complaint = Complaint(
+        title=title,
+        description=description,
+        service_type=serviceType,
+        reporter_id=user.id,
+        location_lat=location_data.get("lat") if location_data else None,
+        location_lng=location_data.get("lng") if location_data else None,
+        location_address=location_data.get("address") if location_data else None
+    )
+    
+    db.add(new_complaint)
+    db.commit()
+    db.refresh(new_complaint)
+    
+    # Add initial status history
+    status_history = ComplaintStatusHistory(
+        complaint_id=new_complaint.id,
+        status="Open",
+        note="Complaint submitted by citizen",
+        updated_by=f"{user.first_name} {user.last_name}"
+    )
+    db.add(status_history)
+    
+    # Handle image uploads (mock - in production, save to cloud storage)
+    image_urls = []
+    for image in images:
+        if image.filename:
+            # Mock image URL - in production, upload to cloud storage
+            image_url = f"/uploads/{new_complaint.id}_{image.filename}"
+            image_urls.append(image_url)
+            
+            complaint_image = ComplaintImage(
+                complaint_id=new_complaint.id,
+                image_url=image_url
+            )
+            db.add(complaint_image)
+    
+    db.commit()
+    
+    return {
+        "complaint": {
+            "id": new_complaint.id,
+            "title": new_complaint.title,
+            "status": new_complaint.status,
+            "images": image_urls
+        }
+    }
+
 # Geocoding endpoint
 @app.post("/api/geocode")
 async def reverse_geocode(request: dict, current_user: User = Depends(get_current_user)):
@@ -881,6 +948,7 @@ async def upload_files(files: List[UploadFile] = File(...), current_user: User =
             uploaded_urls.append(f"/uploads/{unique_filename}")
     
     return {"urls": uploaded_urls}
+    
 
 # Health check endpoint
 @app.get("/api/health")
