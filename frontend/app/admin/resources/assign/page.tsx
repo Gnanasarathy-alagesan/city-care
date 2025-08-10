@@ -61,7 +61,7 @@ export default function AssignResourcesPage() {
   const fetchComplaints = async () => {
     try {
       const response = await adminService.getComplaints({
-        status: "Open,In Progress",
+        status: "Open",
         limit: 100,
       })
       setComplaints(response.complaints)

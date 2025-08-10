@@ -40,20 +40,21 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { DashboardLayout } from "@/components/dashboard-layout"
+import { adminService, ResourceFilters } from "@/services/admin.service"
 
 interface Resource {
   id: string
   name: string
   type: string
   serviceCategory: string
-  description: string
-  availabilityStatus: string
-  contactPerson: string
-  contactPhone: string
-  contactEmail: string
-  location: string
-  capacity: number
-  hourlyRate: number
+  description?: string
+  availabilityStatus: 'Available' | 'Busy' | 'Maintenance'
+  contactPerson?: string
+  contactPhone?: string
+  contactEmail?: string
+  location?: string
+  capacity?: number
+  hourlyRate?: number
   activeAssignments: number
   createdAt: string
   updatedAt: string
@@ -81,30 +82,23 @@ export default function ResourcesPage() {
 
   const fetchResources = async () => {
     try {
-      const token = localStorage.getItem("token")
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: "20",
-        ...(searchTerm && { search: searchTerm }),
-        ...(typeFilter !== "all" && { type_filter: typeFilter }),
-        ...(serviceFilter !== "all" && { service_category: serviceFilter }),
-        ...(statusFilter !== "all" && { availability_status: statusFilter }),
-      })
-
-      const response = await fetch(`http://localhost:8000/api/admin/resources?${params}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setResources(data.resources)
-        setTotal(data.total)
+      const filters: ResourceFilters = {
+        page,
+        limit: 20,
+        ...(searchTerm ? { search: searchTerm } : {}),
+        ...(typeFilter !== "all" ? { type_filter: typeFilter } : {}),
+        ...(serviceFilter !== "all" ? { service_category: serviceFilter } : {}),
+        ...(statusFilter !== "all" ? { availability_status: statusFilter } : {}),
+      }
+      
+      const response = await adminService.getResources(filters)
+      
+      if (response.resources) {
+        setResources(response.resources)
+        setTotal(response.total)
 
         // Calculate stats
-        const statsData = data.resources.reduce(
+        const statsData = response.resources.reduce(
           (acc: ResourceStats, resource: Resource) => {
             acc.total++
             if (resource.availabilityStatus === "Available") acc.available++
@@ -133,72 +127,60 @@ export default function ResourcesPage() {
   }, [page, searchTerm, typeFilter, serviceFilter, statusFilter])
 
   const handleEdit = async (resource: Resource) => {
-    try {
-      const token = localStorage.getItem("token")
-      const response = await fetch(`http://localhost:8000/api/admin/resources/${resource.id}`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: resource.name,
-          type: resource.type,
-          service_category: resource.serviceCategory,
-          description: resource.description,
-          availability_status: resource.availabilityStatus,
-          contact_person: resource.contactPerson,
-          contact_phone: resource.contactPhone,
-          contact_email: resource.contactEmail,
-          location: resource.location,
-          capacity: resource.capacity,
-          hourly_rate: resource.hourlyRate,
-        }),
-      })
-
-      if (response.ok) {
-        toast({
-          title: "Success",
-          description: "Resource updated successfully",
-        })
-        setEditingResource(null)
-        fetchResources()
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update resource",
-        variant: "destructive",
-      })
+  try {
+    const updates: Partial<Resource> = {
+      name: resource.name,
+      type: resource.type,
+      serviceCategory: resource.serviceCategory,
+      description: resource.description,
+      availabilityStatus: resource.availabilityStatus,
+      contactPerson: resource.contactPerson,
+      contactPhone: resource.contactPhone,
+      contactEmail: resource.contactEmail,
+      location: resource.location,
+      capacity: resource.capacity,
+      hourlyRate: resource.hourlyRate,
     }
+
+    const response = await adminService.updateResource(resource.id, updates)
+
+    if (response?.resource) {
+      toast({
+        title: "Success",
+        description: response.message || "Resource updated successfully",
+      })
+      setEditingResource(null)
+      fetchResources()
+    }
+  } catch (error) {
+    toast({
+      title: "Error",
+      description: "Failed to update resource",
+      variant: "destructive",
+    })
   }
+}
 
   const handleDelete = async (resourceId: string) => {
-    try {
-      const token = localStorage.getItem("token")
-      const response = await fetch(`http://localhost:8000/api/admin/resources/${resourceId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+  try {
+    const response = await adminService.deleteResource(resourceId)
 
-      if (response.ok) {
-        toast({
-          title: "Success",
-          description: "Resource deleted successfully",
-        })
-        setDeleteConfirm(null)
-        fetchResources()
-      }
-    } catch (error) {
+    if (response?.message) {
       toast({
-        title: "Error",
-        description: "Failed to delete resource",
-        variant: "destructive",
+        title: "Success",
+        description: response.message || "Resource deleted successfully",
       })
+      setDeleteConfirm(null)
+      fetchResources()
     }
+  } catch (error) {
+    toast({
+      title: "Error",
+      description: "Failed to delete resource",
+      variant: "destructive",
+    })
   }
+}
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -465,7 +447,7 @@ export default function ResourcesPage() {
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <Clock className="h-4 w-4 text-gray-400" />
-                        <Badge variant="secondary">{resource.activeAssignments} active</Badge>
+                        <Badge variant="secondary">{resource.activeAssignments}</Badge>
                       </div>
                     </TableCell>
                     <TableCell>

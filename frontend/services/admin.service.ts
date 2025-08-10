@@ -147,6 +147,7 @@ export const adminService = {
     capacity?: number
     hourly_rate?: number
   }) => {
+    console.log('Creating resource with data:', resourceData)
     const response = await adminApi.post('/admin/resources', resourceData)
     return response.data
   },

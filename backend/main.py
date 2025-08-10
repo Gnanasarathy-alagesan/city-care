@@ -24,6 +24,8 @@ from auth import get_current_user, get_admin_access
 
 import logging
 
+from utils import camel_to_snake
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -256,16 +258,16 @@ class ResourceCreate(BaseModel):
 class ResourceUpdate(BaseModel):
     name: Optional[str] = None
     type: Optional[str] = None
-    service_category: Optional[str] = None
+    serviceCategory: Optional[str] = None
     description: Optional[str] = None
-    availability_status: Optional[str] = None
-    contact_person: Optional[str] = None
-    contact_phone: Optional[str] = None
-    contact_email: Optional[str] = None
+    availabilityStatus: Optional[str] = None
+    contactPerson: Optional[str] = None
+    contactPhone: Optional[str] = None
+    contactEmail: Optional[str] = None
     location: Optional[str] = None
     capacity: Optional[int] = None
-    hourly_rate: Optional[float] = None
-    is_active: Optional[bool] = None
+    hourlyRate: Optional[float] = None
+    isActive: Optional[bool] = None
 
 class ResourceAssignmentCreate(BaseModel):
     resource_ids: List[str]
@@ -813,8 +815,9 @@ async def get_admin_complaints(
 ):
     query = db.query(Complaint).options(
         joinedload(Complaint.status_history),
-        joinedload(Complaint.reporter),   # eager load reporter
-        joinedload(Complaint.images)      # eager load images
+        joinedload(Complaint.reporter),
+        joinedload(Complaint.images),
+        joinedload(Complaint.resources)
     )
     
     if search:
@@ -861,6 +864,14 @@ async def get_admin_complaints(
                 "email": complaint.reporter.email
             } if complaint.reporter else None,
             "images": [img.image_url for img in complaint.images],
+            "resources": [
+                {
+                    "id": resource.id,
+                    "name": resource.name,
+                    "type": resource.type,
+                    "status": resource.availability_status
+                } for resource in complaint.resources
+            ],
             "history": [
                 {
                     "status": hist.status,
@@ -877,7 +888,6 @@ async def get_admin_complaints(
         "total": total,
         "page": page
     }
-
 
 @app.get("/api/complaints/{complaint_id}")
 async def get_complaint(complaint_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -1390,15 +1400,18 @@ async def update_resource(
     db: Session = Depends(get_db)
 ):
     resource = db.query(Resource).filter(Resource.id == resource_id).first()
+    
     if not resource:
         raise HTTPException(status_code=404, detail="Resource not found")
     
     # Update fields
-    for field, value in resource_data.dict(exclude_unset=True).items():
-        setattr(resource, field, value)
-    
+    for field, value in resource_data.model_dump(exclude_unset=True).items():
+        updated_field = camel_to_snake(field)
+        setattr(resource, updated_field, value)  
     resource.updated_at = datetime.now(timezone.utc)
+    db.add(resource)
     db.commit()
+    db.refresh(resource)
     
     return {
         "message": "Resource updated successfully",

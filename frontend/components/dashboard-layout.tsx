@@ -213,7 +213,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <nav className="space-y-1">
             {navigation.map((item) => {
               const isActive = pathname === item.href
-              console.log('Checking active state for:', pathname, item.href, 'Active:', isActive)
               return (
                 <Link
                   key={item.name}
