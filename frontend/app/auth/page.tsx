@@ -39,6 +39,8 @@ export default function AuthPage() {
       })
 
       // Redirect based on user type
+      console.log('User isAdmin:', response.isAdmin)
+      console.log('Redirecting to:', response.isAdmin ? '/admin' : '/dashboard')
       router.push(response.isAdmin ? '/admin' : '/dashboard')
 
     } catch (error: any) {

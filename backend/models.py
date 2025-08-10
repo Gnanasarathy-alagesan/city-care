@@ -76,3 +76,4 @@ class Service(Base):
     description = Column(Text, nullable=False)
     icon = Column(String(50), nullable=False)
     examples = Column(Text, nullable=False)  # JSON string
+

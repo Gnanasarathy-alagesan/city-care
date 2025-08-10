@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { FileText, Clock, CheckCircle, AlertTriangle, MapPin, Search, Bot, TrendingUp, Users } from 'lucide-react'
+import { FileText, Clock, CheckCircle, AlertTriangle, MapPin, Search, Bot, TrendingUp, Users, Wrench, Truck } from 'lucide-react'
 import { adminService, AdminStats } from '@/services/admin.service'
 
 export default function AdminDashboardPage() {
@@ -89,6 +89,30 @@ export default function AdminDashboardPage() {
     }
   ]
 
+  const resourceStats = [
+    {
+      title: "Total Resources",
+      value: statsinfo?.totalResources,
+      icon: Wrench,
+      color: "text-purple-600",
+      bgColor: "bg-purple-100"
+    },
+    {
+      title: "Available",
+      value: statsinfo?.availableResources,
+      icon: CheckCircle,
+      color: "text-green-600",
+      bgColor: "bg-green-100"
+    },
+    {
+      title: "Busy",
+      value: statsinfo?.busyResources,
+      icon: Clock,
+      color: "text-yellow-600",
+      bgColor: "bg-yellow-100"
+    }
+  ]
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'Open':
@@ -133,8 +157,29 @@ export default function AdminDashboardPage() {
                     <p className="text-sm font-medium text-gray-600">{stat.title}</p>
                     <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
                     {stat.change !== undefined && stat.change !== null && (
-                      <p className="text-sm text-green-600">{stat.change} from last week</p>
+                      <p className={`text-sm ${stat.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {stat.change > 0 ? '+' : ''}{stat.change}% from last week
+                      </p>
                     )}
+                  </div>
+                  <div className={`w-12 h-12 ${stat.bgColor} rounded-lg flex items-center justify-center`}>
+                    <stat.icon className={`w-6 h-6 ${stat.color}`} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Resource Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {resourceStats.map((stat) => (
+            <Card key={stat.title}>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">{stat.title}</p>
+                    <p className="text-3xl font-bold text-gray-900">{stat.value || 0}</p>
                   </div>
                   <div className={`w-12 h-12 ${stat.bgColor} rounded-lg flex items-center justify-center`}>
                     <stat.icon className={`w-6 h-6 ${stat.color}`} />
@@ -147,7 +192,7 @@ export default function AdminDashboardPage() {
 
         <Tabs defaultValue="complaints" className="space-y-6">
           <TabsList>
-            <TabsTrigger value="complaints">Complaints</TabsTrigger>
+            <TabsTrigger value="complaints">Recent Complaints</TabsTrigger>
             <TabsTrigger value="map">Map View</TabsTrigger>
             <TabsTrigger value="ai">AI Insights</TabsTrigger>
           </TabsList>
@@ -159,6 +204,7 @@ export default function AdminDashboardPage() {
                 <div className="flex flex-col md:flex-row gap-4">
                   <div className="flex-1">
                     <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                       <Input
                         placeholder="Search complaints..."
                         value={searchText}
@@ -209,22 +255,34 @@ export default function AdminDashboardPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Recent Complaints</CardTitle>
-                <CardDescription>Manage and assign complaints to teams</CardDescription>
+                <CardDescription>Manage and assign complaints to teams and resources</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   {complaints.map((complaint) => (
                     <div key={complaint.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
-                      <div className="flex-1 grid grid-cols-1 md:grid-cols-6 gap-4 items-center">
-                        <div>
+                      <div className="flex-1 grid grid-cols-1 md:grid-cols-7 gap-4 items-center">
+                        <div className="md:col-span-2">
                           <p className="font-semibold text-gray-900">{complaint.title}</p>
                           <p className="text-sm text-gray-500">#{complaint.id}</p>
                         </div>
                         <div className="text-sm text-gray-600">{complaint.service}</div>
                         <div>{getStatusBadge(complaint.status)}</div>
                         <div>{getPriorityBadge(complaint.priority)}</div>
-                        <div className="text-sm text-gray-600">{complaint.location}</div>
-                        <div className="text-sm text-gray-600">{complaint?.assignedTo ?? 'NA'}</div>
+                        <div className="text-sm text-gray-600">
+                          {complaint.location?.address || 'No location'}
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          {complaint.resources && complaint.resources.length > 0 ? (
+                            <div className="flex items-center space-x-1">
+                              <Badge variant="outline" className="text-xs">
+                                {complaint.resources.length} resources
+                              </Badge>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-400">No resources</span>
+                          )}
+                        </div>
                       </div>
                       <div className="flex gap-2">
                         <Button variant="outline" size="sm">
@@ -236,6 +294,42 @@ export default function AdminDashboardPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="map" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Complaint Map View</CardTitle>
+                <CardDescription>Geographic distribution of complaints and resources</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-96 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <div className="text-center">
+                    <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">Map view coming soon</p>
+                    <p className="text-sm text-gray-500">Interactive map showing complaint locations and resource deployment</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="ai" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>AI Insights</CardTitle>
+                <CardDescription>Intelligent analysis and recommendations</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-96 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <div className="text-center">
+                    <Bot className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">AI insights coming soon</p>
+                    <p className="text-sm text-gray-500">Predictive analytics, resource optimization, and automated recommendations</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>

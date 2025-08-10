@@ -10,7 +10,7 @@ import jwt
 from passlib.context import CryptContext
 import uuid
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import create_engine, Column, String, DateTime, Integer, Text, Boolean, Float, ForeignKey
+from sqlalchemy import create_engine, Column, String, DateTime, Integer, Text, Boolean, Float, ForeignKey, Table
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -33,6 +33,7 @@ app = FastAPI(
     description="Backend service for CityCare citizen complaint platform",
     version="1.0.0"
 )
+
 
 # CORS middleware
 app.add_middleware(
@@ -59,6 +60,15 @@ security = HTTPBearer()
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+complaint_resources = Table(
+    'complaint_resources',
+    Base.metadata,
+    Column('complaint_id', String, ForeignKey('complaints.id'), primary_key=True),
+    Column('resource_id', String, ForeignKey('resources.id'), primary_key=True),
+    Column('assigned_at', DateTime, default=datetime.utcnow),
+    Column('assigned_by', String(100), nullable=False)
+)
 
 # Database Models
 class User(Base):
@@ -95,12 +105,14 @@ class Complaint(Base):
     reporter_id = Column(String, ForeignKey("users.id"), nullable=False)
     assigned_to = Column(String(100), nullable=True)
     team_id = Column(String(50), nullable=True)
+    estimated_resolution = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     reporter = relationship("User", back_populates="complaints")
     status_history = relationship("ComplaintStatusHistory", back_populates="complaint")
     images = relationship("ComplaintImage", back_populates="complaint")
+    resources = relationship("Resource", secondary=complaint_resources, back_populates="complaints")
 
 class ComplaintStatusHistory(Base):
     __tablename__ = "complaint_status_history"
@@ -132,6 +144,46 @@ class Service(Base):
     description = Column(Text, nullable=False)
     icon = Column(String(50), nullable=False)
     examples = Column(Text, nullable=False)  # JSON string
+
+
+class Resource(Base):
+    __tablename__ = "resources"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String(100), nullable=False)
+    type = Column(String(50), nullable=False)  # Equipment, Personnel, Vehicle, etc.
+    service_category = Column(String(50), nullable=False)  # roads, water, electricity, etc.
+    description = Column(Text, nullable=True)
+    availability_status = Column(String(20), default="Available")  # Available, Busy, Maintenance
+    contact_person = Column(String(100), nullable=True)
+    contact_phone = Column(String(20), nullable=True)
+    contact_email = Column(String(100), nullable=True)
+    location = Column(String(200), nullable=True)
+    capacity = Column(Integer, nullable=True)  # For equipment/vehicles
+    hourly_rate = Column(Float, nullable=True)  # Cost per hour
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+    
+    complaints = relationship("Complaint", secondary=complaint_resources, back_populates="resources")
+
+class ResourceAssignment(Base):
+    __tablename__ = "resource_assignments"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    complaint_id = Column(String, ForeignKey("complaints.id"), nullable=False)
+    resource_id = Column(String, ForeignKey("resources.id"), nullable=False)
+    assigned_by = Column(String(100), nullable=False)
+    assigned_at = Column(DateTime, default=datetime.utcnow)
+    start_time = Column(DateTime, nullable=True)
+    end_time = Column(DateTime, nullable=True)
+    status = Column(String(20), default="Assigned")  # Assigned, In Progress, Completed, Cancelled
+    notes = Column(Text, nullable=True)
+    estimated_hours = Column(Float, nullable=True)
+    actual_hours = Column(Float, nullable=True)
+    
+    complaint = relationship("Complaint")
+    resource = relationship("Resource")
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -189,6 +241,59 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     email: Optional[str] = None
 
+class ResourceCreate(BaseModel):
+    name: str
+    type: str
+    service_category: str
+    description: Optional[str] = None
+    contact_person: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    location: Optional[str] = None
+    capacity: Optional[int] = None
+    hourly_rate: Optional[float] = None
+
+class ResourceUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    service_category: Optional[str] = None
+    description: Optional[str] = None
+    availability_status: Optional[str] = None
+    contact_person: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    location: Optional[str] = None
+    capacity: Optional[int] = None
+    hourly_rate: Optional[float] = None
+    is_active: Optional[bool] = None
+
+class ResourceAssignmentCreate(BaseModel):
+    resource_ids: List[str]
+    notes: Optional[str] = None
+    estimated_hours: Optional[float] = None
+
+# Bot Models
+class BotMessage(BaseModel):
+    message: str
+    history: Optional[List[dict]] = None
+
+class BotConfig(BaseModel):
+    isEnabled: Optional[bool] = None
+    maxSessionDuration: Optional[int] = None
+    confidenceThreshold: Optional[float] = None
+    fallbackMessage: Optional[str] = None
+    adminNotifications: Optional[bool] = None
+    autoEscalation: Optional[bool] = None
+    escalationThreshold: Optional[int] = None
+
+# WatsonX Analytics Models
+class WatsonXAnalysisRequest(BaseModel):
+    includeComplaints: Optional[bool] = True
+    includeResources: Optional[bool] = True
+    includeUsers: Optional[bool] = True
+    timeframe: Optional[str] = "30d"
+
+
 # Utility functions
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
@@ -212,6 +317,208 @@ def get_db():
         yield db
     finally:
         db.close()
+
+# Bot session storage (in production, use database)
+bot_sessions = {}
+bot_messages = {}
+bot_config = {
+    "isEnabled": True,
+    "maxSessionDuration": 60,
+    "confidenceThreshold": 0.5,
+    "fallbackMessage": "I'm sorry, I didn't understand that. Could you please rephrase your question?",
+    "adminNotifications": True,
+    "autoEscalation": False,
+    "escalationThreshold": 3
+}
+
+# Mock WatsonX AI Service
+class WatsonXService:
+    def __init__(self):
+        self.intents = {
+            "file_complaint": ["complaint", "report", "issue", "problem", "file"],
+            "check_status": ["status", "check", "update", "progress"],
+            "get_services": ["services", "help", "what can", "available"],
+            "admin_help": ["admin", "manage", "administration", "control"],
+            "greeting": ["hello", "hi", "hey", "good morning", "good afternoon"],
+            "goodbye": ["bye", "goodbye", "see you", "thanks", "thank you"]
+        }
+        
+        self.responses = {
+            "file_complaint": "I can help you file a complaint. What type of issue would you like to report? We handle roads, water, electricity, waste management, public safety, and parks & recreation.",
+            "check_status": "I can help you check your complaint status. Please provide your complaint ID or I can look up your recent complaints.",
+            "get_services": "CityCare offers these services:\n• Roads & Infrastructure\n• Water Supply\n• Electricity\n• Waste Management\n• Public Safety\n• Parks & Recreation\n\nWhich service do you need help with?",
+            "admin_help": "I have admin privileges and can help you with:\n• Managing complaints\n• Assigning resources\n• Updating complaint status\n• Viewing user information\n• Generating reports\n\nWhat would you like to do?",
+            "greeting": "Hello! I'm your CityCare AI Assistant powered by WatsonX. I'm here to help you with city services, complaints, and administrative tasks. How can I assist you today?",
+            "goodbye": "Thank you for using CityCare! Have a great day and don't hesitate to reach out if you need any assistance.",
+            "fallback": "I'm not sure I understand that request. I can help you with filing complaints, checking status, city services information, and administrative tasks. Could you please rephrase your question?"
+        }
+
+    def analyze_message(self, message: str, history: List[dict] = None) -> dict:
+        message_lower = message.lower()
+        
+        # Determine intent
+        detected_intent = "fallback"
+        confidence = 0.0
+        
+        for intent, keywords in self.intents.items():
+            matches = sum(1 for keyword in keywords if keyword in message_lower)
+            if matches > 0:
+                intent_confidence = matches / len(keywords)
+                if intent_confidence > confidence:
+                    confidence = intent_confidence
+                    detected_intent = intent
+        
+        # Extract entities (mock)
+        entities = []
+        if "complaint" in message_lower and any(word in message_lower for word in ["cc-", "id", "number"]):
+            entities.append({"entity": "complaint_id", "value": "CC-12345678"})
+        
+        # Generate response
+        response_message = self.responses.get(detected_intent, self.responses["fallback"])
+        
+        # Add context-aware responses
+        if detected_intent == "admin_help":
+            response_message += "\n\nAs an admin, you can also:\n• Access all user complaints\n• Manage city resources\n• View analytics and reports"
+        
+        # Suggested actions
+        suggested_actions = []
+        if detected_intent == "file_complaint":
+            suggested_actions = [
+                "File a new complaint",
+                "Upload photos of the issue",
+                "Set complaint priority"
+            ]
+        elif detected_intent == "check_status":
+            suggested_actions = [
+                "View complaint details",
+                "Check recent updates",
+                "Contact assigned team"
+            ]
+        elif detected_intent == "admin_help":
+            suggested_actions = [
+                "View all complaints",
+                "Manage resources",
+                "Generate reports",
+                "Update complaint status"
+            ]
+        
+        return {
+            "message": response_message,
+            "intent": detected_intent,
+            "confidence": min(confidence + 0.3, 1.0),  # Boost confidence
+            "entities": entities,
+            "suggestedActions": suggested_actions
+        }
+
+    def analyze_system_data(self, data: dict) -> dict:
+        """Analyze system data and generate insights using WatsonX-like logic"""
+        
+        # Extract key metrics
+        total_complaints = data.get("totalComplaints", 0)
+        resolved_complaints = data.get("resolvedComplaints", 0)
+        avg_resolution_time = data.get("avgResolutionTime", 0)
+        resource_utilization = data.get("resourceUtilization", 0)
+        citizen_satisfaction = data.get("citizenSatisfaction", 0)
+        
+        insights = []
+        recommendations = []
+        
+        # Generate insights based on data patterns
+        if total_complaints > 100:
+            if resolved_complaints / total_complaints < 0.8:
+                insights.append({
+                    "id": str(uuid.uuid4()),
+                    "type": "alert",
+                    "title": "Low Resolution Rate Detected",
+                    "description": f"Current resolution rate is {(resolved_complaints/total_complaints)*100:.1f}%, which is below the target of 80%.",
+                    "confidence": 92,
+                    "impact": "high",
+                    "actionable": True,
+                    "data": {
+                        "currentRate": f"{(resolved_complaints/total_complaints)*100:.1f}%",
+                        "targetRate": "80%",
+                        "gap": f"{80 - (resolved_complaints/total_complaints)*100:.1f}%"
+                    }
+                })
+                recommendations.append("Increase resource allocation to high-priority complaints to improve resolution rate")
+        
+        if avg_resolution_time > 5:
+            insights.append({
+                "id": str(uuid.uuid4()),
+                "type": "optimization",
+                "title": "Resolution Time Optimization Opportunity",
+                "description": f"Average resolution time of {avg_resolution_time} days exceeds the target of 5 days.",
+                "confidence": 87,
+                "impact": "medium",
+                "actionable": True,
+                "data": {
+                    "currentTime": f"{avg_resolution_time} days",
+                    "targetTime": "5 days",
+                    "improvement": f"{avg_resolution_time - 5} days"
+                }
+            })
+            recommendations.append("Implement automated routing and priority-based assignment to reduce resolution time")
+        
+        if resource_utilization > 85:
+            insights.append({
+                "id": str(uuid.uuid4()),
+                "type": "prediction",
+                "title": "Resource Capacity Warning",
+                "description": f"Resource utilization at {resource_utilization}% indicates potential capacity constraints.",
+                "confidence": 89,
+                "impact": "high",
+                "actionable": True,
+                "data": {
+                    "currentUtilization": f"{resource_utilization}%",
+                    "threshold": "85%",
+                    "risk": "capacity shortage"
+                }
+            })
+            recommendations.append("Consider expanding resource capacity or optimizing current resource allocation")
+        
+        if citizen_satisfaction < 4.0:
+            insights.append({
+                "id": str(uuid.uuid4()),
+                "type": "recommendation",
+                "title": "Citizen Satisfaction Improvement Needed",
+                "description": f"Current satisfaction score of {citizen_satisfaction}/5 is below expectations.",
+                "confidence": 84,
+                "impact": "medium",
+                "actionable": True,
+                "data": {
+                    "currentScore": f"{citizen_satisfaction}/5",
+                    "targetScore": "4.0/5",
+                    "improvement": f"{4.0 - citizen_satisfaction:.1f} points"
+                }
+            })
+            recommendations.append("Implement citizen feedback system and improve communication during complaint resolution")
+        
+        # Determine trends
+        trends = {
+            "complaintTrend": "increasing" if total_complaints > 50 else "stable",
+            "resolutionTrend": "improving" if resolved_complaints / total_complaints > 0.8 else "declining",
+            "satisfactionTrend": "stable" if citizen_satisfaction >= 4.0 else "declining"
+        }
+        
+        return {
+            "insights": insights,
+            "recommendations": recommendations,
+            "trends": trends
+        }
+
+# Initialize WatsonX service
+watsonx_service = WatsonXService()
+
+# Bot configuration
+bot_config = {
+    "isEnabled": True,
+    "maxSessionDuration": 60,
+    "confidenceThreshold": 0.5,
+    "fallbackMessage": "I'm sorry, I didn't understand that. Could you please rephrase your question?",
+    "adminNotifications": True,
+    "autoEscalation": False,
+    "escalationThreshold": 3
+}
 
 # Initialize default data
 def init_default_data(db: Session):
@@ -292,6 +599,53 @@ def startup_event():
 @app.get("/api")
 def read_root():
     return {"message": "API is running"}
+# Services endpoint
+@app.get("/api/services")
+async def get_services(db: Session = Depends(get_db)):
+    services = db.query(Service).all()
+    service_list = []
+    
+    for service in services:
+        service_list.append({
+            "id": service.id,
+            "name": service.name,
+            "description": service.description,
+            "icon": service.icon,
+            "examples": json.loads(service.examples)
+        })
+    
+    return {"services": service_list}
+
+# File upload endpoint
+@app.post("/api/upload")
+async def upload_files(files: List[UploadFile] = File(...), current_user: User = Depends(get_current_user)):
+    uploaded_urls = []
+    
+    # Create uploads directory if it doesn't exist
+    upload_dir = Path("uploads")
+    upload_dir.mkdir(exist_ok=True)
+    
+    for file in files:
+        if file.filename:
+            # Generate unique filename
+            file_extension = file.filename.split(".")[-1]
+            unique_filename = f"{uuid.uuid4()}.{file_extension}"
+            file_path = upload_dir / unique_filename
+            
+            # Save file (in production, upload to cloud storage)
+            with open(file_path, "wb") as buffer:
+                content = await file.read()
+                buffer.write(content)
+            
+            uploaded_urls.append(f"/uploads/{unique_filename}")
+    
+    return {"urls": uploaded_urls}
+    
+
+# Health check endpoint
+@app.get("/api/health")
+async def health_check():
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 # Authentication endpoints
@@ -648,7 +1002,7 @@ async def create_complaint(
         }
     }
 
-# Admin endpoints
+# Admin endpoints with API Key authentication
 @app.get("/api/admin/dashboard/stats")
 async def get_admin_dashboard_stats(admin_access = Depends(get_admin_access), db: Session = Depends(get_db)):
     now = datetime.now(timezone.utc)
@@ -670,7 +1024,18 @@ async def get_admin_dashboard_stats(admin_access = Depends(get_admin_access), db
 
     high_priority = db.query(Complaint).filter(
         Complaint.priority == "High",
-        Complaint.status in ("In Progress", "Open")
+        Complaint.status.in_(["In Progress", "Open"])
+    ).count()
+
+    # Resource stats
+    total_resources = db.query(Resource).filter(Resource.is_active == True).count()
+    available_resources = db.query(Resource).filter(
+        Resource.is_active == True,
+        Resource.availability_status == "Available"
+    ).count()
+    busy_resources = db.query(Resource).filter(
+        Resource.is_active == True,
+        Resource.availability_status == "Busy"
     ).count()
 
     # Previous week counts
@@ -711,6 +1076,9 @@ async def get_admin_dashboard_stats(admin_access = Depends(get_admin_access), db
         "resolvedChange": calc_percent_change(resolved, prev_resolved),
         "highPriority": high_priority,
         "highPriorityChange": calc_percent_change(high_priority, prev_high_priority),
+        "totalResources": total_resources,
+        "availableResources": available_resources,
+        "busyResources": busy_resources
     }
 
 # Complaint endpoints
@@ -923,54 +1291,569 @@ async def reverse_geocode(request: dict, current_user: User = Depends(get_curren
         "address": f"123 Main Street, Downtown (Lat: {lat:.4f}, Lng: {lng:.4f})",
         "district": "Downtown District"
     }
-
-# Services endpoint
-@app.get("/api/services")
-async def get_services(db: Session = Depends(get_db)):
-    services = db.query(Service).all()
-    service_list = []
+# Resource Management Endpoints
+@app.get("/api/admin/resources")
+async def get_resources(
+    page: int = 1,
+    limit: int = 20,
+    search: Optional[str] = None,
+    type_filter: Optional[str] = None,
+    service_category: Optional[str] = None,
+    availability_status: Optional[str] = None,
+    admin_access = Depends(get_admin_access),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Resource).filter(Resource.is_active == True)
     
-    for service in services:
-        service_list.append({
-            "id": service.id,
-            "name": service.name,
-            "description": service.description,
-            "icon": service.icon,
-            "examples": json.loads(service.examples)
+    if search:
+        query = query.filter(Resource.name.contains(search))
+    if type_filter and type_filter != "all":
+        query = query.filter(Resource.type == type_filter)
+    if service_category and service_category != "all":
+        query = query.filter(Resource.service_category == service_category)
+    if availability_status and availability_status != "all":
+        query = query.filter(Resource.availability_status == availability_status)
+    
+    total = query.count()
+    resources = query.offset((page - 1) * limit).limit(limit).all()
+    
+    resource_list = []
+    for resource in resources:
+        # Count active assignments
+        active_assignments = db.query(ResourceAssignment).filter(
+            ResourceAssignment.resource_id == resource.id,
+            ResourceAssignment.status.in_(["Assigned", "In Progress"])
+        ).count()
+        
+        resource_list.append({
+            "id": resource.id,
+            "name": resource.name,
+            "type": resource.type,
+            "serviceCategory": resource.service_category,
+            "description": resource.description,
+            "availabilityStatus": resource.availability_status,
+            "contactPerson": resource.contact_person,
+            "contactPhone": resource.contact_phone,
+            "contactEmail": resource.contact_email,
+            "location": resource.location,
+            "capacity": resource.capacity,
+            "hourlyRate": resource.hourly_rate,
+            "activeAssignments": active_assignments,
+            "createdAt": resource.created_at.strftime("%Y-%m-%d"),
+            "updatedAt": resource.updated_at.strftime("%Y-%m-%d")
         })
     
-    return {"services": service_list}
+    return {
+        "resources": resource_list,
+        "total": total,
+        "page": page
+    }
 
-# File upload endpoint
-@app.post("/api/upload")
-async def upload_files(files: List[UploadFile] = File(...), current_user: User = Depends(get_current_user)):
-    uploaded_urls = []
+@app.post("/api/admin/resources")
+async def create_resource(
+    resource_data: ResourceCreate,
+    admin_access = Depends(get_admin_access),
+    db: Session = Depends(get_db)
+):
+    new_resource = Resource(
+        name=resource_data.name,
+        type=resource_data.type,
+        service_category=resource_data.service_category,
+        description=resource_data.description,
+        contact_person=resource_data.contact_person,
+        contact_phone=resource_data.contact_phone,
+        contact_email=resource_data.contact_email,
+        location=resource_data.location,
+        capacity=resource_data.capacity,
+        hourly_rate=resource_data.hourly_rate
+    )
     
-    # Create uploads directory if it doesn't exist
-    upload_dir = Path("uploads")
-    upload_dir.mkdir(exist_ok=True)
+    db.add(new_resource)
+    db.commit()
+    db.refresh(new_resource)
     
-    for file in files:
-        if file.filename:
-            # Generate unique filename
-            file_extension = file.filename.split(".")[-1]
-            unique_filename = f"{uuid.uuid4()}.{file_extension}"
-            file_path = upload_dir / unique_filename
-            
-            # Save file (in production, upload to cloud storage)
-            with open(file_path, "wb") as buffer:
-                content = await file.read()
-                buffer.write(content)
-            
-            uploaded_urls.append(f"/uploads/{unique_filename}")
-    
-    return {"urls": uploaded_urls}
-    
+    return {
+        "message": "Resource created successfully",
+        "resource": {
+            "id": new_resource.id,
+            "name": new_resource.name,
+            "type": new_resource.type,
+            "serviceCategory": new_resource.service_category
+        }
+    }
 
-# Health check endpoint
-@app.get("/api/health")
-async def health_check():
-    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
+@app.put("/api/admin/resources/{resource_id}")
+async def update_resource(
+    resource_id: str,
+    resource_data: ResourceUpdate,
+    admin_access = Depends(get_admin_access),
+    db: Session = Depends(get_db)
+):
+    resource = db.query(Resource).filter(Resource.id == resource_id).first()
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    
+    # Update fields
+    for field, value in resource_data.dict(exclude_unset=True).items():
+        setattr(resource, field, value)
+    
+    resource.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    
+    return {
+        "message": "Resource updated successfully",
+        "resource": {
+            "id": resource.id,
+            "name": resource.name,
+            "availabilityStatus": resource.availability_status
+        }
+    }
+
+@app.delete("/api/admin/resources/{resource_id}")
+async def delete_resource(
+    resource_id: str,
+    admin_access = Depends(get_admin_access),
+    db: Session = Depends(get_db)
+):
+    resource = db.query(Resource).filter(Resource.id == resource_id).first()
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    
+    # Soft delete
+    resource.is_active = False
+    resource.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    
+    return {"message": "Resource deleted successfully"}
+
+# Complaint Resource Assignment Endpoints
+@app.get("/api/admin/complaints/{complaint_id}/resources")
+async def get_complaint_resources(
+    complaint_id: str,
+    admin_access = Depends(get_admin_access),
+    db: Session = Depends(get_db)
+):
+    complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
+    if not complaint:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+    
+    # Get resource assignments
+    assignments = db.query(ResourceAssignment).filter(
+        ResourceAssignment.complaint_id == complaint_id
+    ).join(Resource).all()
+    
+    assignment_list = []
+    for assignment in assignments:
+        assignment_list.append({
+            "id": assignment.id,
+            "resource": {
+                "id": assignment.resource.id,
+                "name": assignment.resource.name,
+                "type": assignment.resource.type,
+                "serviceCategory": assignment.resource.service_category,
+                "contactPerson": assignment.resource.contact_person,
+                "contactPhone": assignment.resource.contact_phone
+            },
+            "assignedBy": assignment.assigned_by,
+            "assignedAt": assignment.assigned_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "status": assignment.status,
+            "startTime": assignment.start_time.strftime("%Y-%m-%d %H:%M:%S") if assignment.start_time else None,
+            "endTime": assignment.end_time.strftime("%Y-%m-%d %H:%M:%S") if assignment.end_time else None,
+            "estimatedHours": assignment.estimated_hours,
+            "actualHours": assignment.actual_hours,
+            "notes": assignment.notes
+        })
+    
+    return {
+        "complaint": {
+            "id": complaint.id,
+            "title": complaint.title,
+            "service": complaint.service_type,
+            "status": complaint.status
+        },
+        "assignments": assignment_list
+    }
+
+@app.post("/api/admin/complaints/{complaint_id}/resources")
+async def assign_resources_to_complaint(
+    complaint_id: str,
+    assignment_data: ResourceAssignmentCreate,
+    admin_access = Depends(get_admin_access),
+    db: Session = Depends(get_db)
+):
+    complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
+    if not complaint:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+    
+    assigned_resources = []
+    assigned_by = "Admin API"  # You might want to get this from the admin_access context
+    
+    for resource_id in assignment_data.resource_ids:
+        resource = db.query(Resource).filter(Resource.id == resource_id).first()
+        if not resource:
+            continue
+        
+        # Check if already assigned
+        existing_assignment = db.query(ResourceAssignment).filter(
+            ResourceAssignment.complaint_id == complaint_id,
+            ResourceAssignment.resource_id == resource_id,
+            ResourceAssignment.status.in_(["Assigned", "In Progress"])
+        ).first()
+        
+        if existing_assignment:
+            continue
+        
+        # Create new assignment
+        assignment = ResourceAssignment(
+            complaint_id=complaint_id,
+            resource_id=resource_id,
+            assigned_by=assigned_by,
+            notes=assignment_data.notes,
+            estimated_hours=assignment_data.estimated_hours
+        )
+        
+        db.add(assignment)
+        
+        # Update resource status
+        resource.availability_status = "Busy"
+        
+        assigned_resources.append({
+            "id": resource.id,
+            "name": resource.name,
+            "type": resource.type
+        })
+    
+    # Add status history
+    if assigned_resources:
+        resource_names = ", ".join([r["name"] for r in assigned_resources])
+        status_history = ComplaintStatusHistory(
+            complaint_id=complaint_id,
+            status=complaint.status,
+            note=f"Resources assigned: {resource_names}",
+            updated_by=assigned_by
+        )
+        db.add(status_history)
+    
+    db.commit()
+    
+    return {
+        "message": f"Successfully assigned {len(assigned_resources)} resources",
+        "assignedResources": assigned_resources
+    }
+
+@app.delete("/api/admin/complaints/{complaint_id}/resources/{resource_id}")
+async def remove_resource_from_complaint(
+    complaint_id: str,
+    resource_id: str,
+    admin_access = Depends(get_admin_access),
+    db: Session = Depends(get_db)
+):
+    assignment = db.query(ResourceAssignment).filter(
+        ResourceAssignment.complaint_id == complaint_id,
+        ResourceAssignment.resource_id == resource_id,
+        ResourceAssignment.status.in_(["Assigned", "In Progress"])
+    ).first()
+    
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Resource assignment not found")
+    
+    # Update assignment status
+    assignment.status = "Cancelled"
+    assignment.end_time = datetime.now(timezone.utc)
+    
+    # Update resource availability
+    resource = db.query(Resource).filter(Resource.id == resource_id).first()
+    if resource:
+        resource.availability_status = "Available"
+    
+    # Add status history
+    status_history = ComplaintStatusHistory(
+        complaint_id=complaint_id,
+        status=db.query(Complaint).filter(Complaint.id == complaint_id).first().status,
+        note=f"Resource removed: {resource.name if resource else resource_id}",
+        updated_by="Admin API"
+    )
+    db.add(status_history)
+    
+    db.commit()
+    
+    return {"message": "Resource removed from complaint successfully"}
+
+# Simplified Bot endpoints
+@app.post("/api/bot/chat")
+async def chat_with_bot(
+    message_data: BotMessage,
+    current_user: User = Depends(get_current_user)
+):
+    if not bot_config["isEnabled"]:
+        raise HTTPException(status_code=503, detail="Bot service is currently disabled")
+    
+    # Get bot response using WatsonX service
+    bot_response = watsonx_service.analyze_message(
+        message_data.message, 
+        message_data.history or []
+    )
+    
+    return {
+        "message": bot_response["message"],
+        "confidence": bot_response["confidence"],
+        "intent": bot_response["intent"],
+        "entities": bot_response["entities"],
+        "suggestedActions": bot_response["suggestedActions"]
+    }
+
+# Admin bot endpoints
+@app.get("/api/admin/bot/config")
+async def get_bot_config(admin_access = Depends(get_admin_access)):
+    return bot_config
+
+@app.put("/api/admin/bot/config")
+async def update_bot_config(
+    config: BotConfig,
+    admin_access = Depends(get_admin_access)
+):
+    for key, value in config.dict(exclude_unset=True).items():
+        if value is not None:
+            bot_config[key] = value
+    
+    return {"message": "Configuration updated successfully"}
+
+@app.get("/api/admin/bot/analytics")
+async def get_bot_analytics(admin_access = Depends(get_admin_access)):
+    # Mock analytics data
+    return {
+        "totalSessions": 156,
+        "activeSessions": 12,
+        "avgSessionDuration": "8.5 min",
+        "topIntents": [
+            {"intent": "file_complaint", "count": 45},
+            {"intent": "check_status", "count": 32},
+            {"intent": "get_services", "count": 28},
+            {"intent": "admin_help", "count": 15},
+            {"intent": "greeting", "count": 12}
+        ],
+        "satisfactionScore": 92,
+        "resolutionRate": 85
+    }
+
+# WatsonX Analytics Endpoints
+@app.get("/api/admin/analytics/watsonx")
+async def get_watsonx_analytics(
+    admin_access = Depends(get_admin_access),
+    db: Session = Depends(get_db)
+):
+    """Get WatsonX-powered analytics and insights"""
+    
+    # Gather current system data
+    now = datetime.now(timezone.utc)
+    month_start = now - timedelta(days=30)
+    
+    total_complaints = db.query(Complaint).count()
+    resolved_complaints = db.query(Complaint).filter(Complaint.status == "Resolved").count()
+    pending_complaints = db.query(Complaint).filter(
+        Complaint.status.in_(["Open", "In Progress"])
+    ).count()
+    
+    # Calculate average resolution time (mock calculation)
+    avg_resolution_time = 4.2
+    
+    # Resource metrics
+    total_resources = db.query(Resource).filter(Resource.is_active == True).count()
+    busy_resources = db.query(Resource).filter(
+        Resource.is_active == True,
+        Resource.availability_status == "Busy"
+    ).count()
+    
+    resource_utilization = (busy_resources / total_resources * 100) if total_resources > 0 else 0
+    
+    # Mock citizen satisfaction and cost efficiency
+    citizen_satisfaction = 4.2
+    cost_efficiency = 87.5
+    
+    # Prepare data for WatsonX analysis
+    system_data = {
+        "totalComplaints": total_complaints,
+        "resolvedComplaints": resolved_complaints,
+        "avgResolutionTime": avg_resolution_time,
+        "resourceUtilization": resource_utilization,
+        "citizenSatisfaction": citizen_satisfaction,
+        "costEfficiency": cost_efficiency,
+        "activeResources": total_resources,
+        "pendingComplaints": pending_complaints
+    }
+    
+    # Get WatsonX analysis
+    watsonx_analysis = watsonx_service.analyze_system_data(system_data)
+    
+    # Prepare response
+    analytics_response = {
+        "overview": {
+            "totalComplaints": total_complaints,
+            "resolvedComplaints": resolved_complaints,
+            "avgResolutionTime": avg_resolution_time,
+            "resourceUtilization": resource_utilization,
+            "citizenSatisfaction": citizen_satisfaction,
+            "costEfficiency": cost_efficiency,
+            "activeResources": total_resources,
+            "pendingComplaints": pending_complaints
+        },
+        "insights": watsonx_analysis["insights"],
+        "trends": watsonx_analysis["trends"],
+        "recommendations": watsonx_analysis["recommendations"]
+    }
+    
+    return analytics_response
+
+@app.post("/api/admin/analytics/watsonx/generate")
+async def generate_watsonx_insights(
+    admin_access = Depends(get_admin_access),
+    db: Session = Depends(get_db)
+):
+    """Generate new insights using WatsonX analysis"""
+    
+    # Gather fresh data
+    total_complaints = db.query(Complaint).count()
+    resolved_complaints = db.query(Complaint).filter(Complaint.status == "Resolved").count()
+    
+    # Mock fresh analysis with more dynamic insights
+    fresh_insights = [
+        {
+            "id": str(uuid.uuid4()),
+            "type": "prediction",
+            "title": "Complaint Volume Forecast",
+            "description": "Based on current trends, expect a 15% increase in complaints next week due to weather patterns.",
+            "confidence": 89,
+            "impact": "medium",
+            "actionable": True,
+            "data": {
+                "expectedIncrease": "15%",
+                "timeframe": "next week",
+                "cause": "weather patterns"
+            }
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "type": "optimization",
+            "title": "Resource Reallocation Opportunity",
+            "description": "Moving 2 personnel from low-activity District A to high-demand District C could reduce response time by 18 minutes.",
+            "confidence": 94,
+            "impact": "high",
+            "actionable": True,
+            "data": {
+                "timeSaved": "18 minutes",
+                "personnel": 2,
+                "fromDistrict": "District A",
+                "toDistrict": "District C"
+            }
+        }
+    ]
+    
+    return {
+        "message": "New insights generated successfully",
+        "insights": fresh_insights
+    }
+
+@app.post("/api/admin/analytics/watsonx/analyze")
+async def analyze_with_watsonx(
+    request: WatsonXAnalysisRequest,
+    admin_access = Depends(get_admin_access),
+    db: Session = Depends(get_db)
+):
+    """Send current data to WatsonX for analysis"""
+    
+    # Gather data based on request parameters
+    data_payload = {}
+    
+    if request.includeComplaints:
+        complaints = db.query(Complaint).all()
+        data_payload["complaints"] = [
+            {
+                "id": c.id,
+                "status": c.status,
+                "service_type": c.service_type,
+                "priority": c.priority,
+                "created_at": c.created_at.isoformat()
+            } for c in complaints
+        ]
+    
+    if request.includeResources:
+        resources = db.query(Resource).filter(Resource.is_active == True).all()
+        data_payload["resources"] = [
+            {
+                "id": r.id,
+                "type": r.type,
+                "availability_status": r.availability_status,
+                "service_category": r.service_category
+            } for r in resources
+        ]
+    
+    if request.includeUsers:
+        users = db.query(User).filter(User.is_admin == False).all()
+        data_payload["users"] = [
+            {
+                "id": u.id,
+                "district": u.district,
+                "created_at": u.created_at.isoformat()
+            } for u in users
+        ]
+    
+    # In a real implementation, this would send data to WatsonX API
+    # For now, we'll return a mock analysis
+    
+    analysis_result = {
+        "status": "completed",
+        "insights_generated": 3,
+        "confidence_score": 0.87,
+        "processing_time": "2.3s",
+        "data_points_analyzed": len(data_payload.get("complaints", [])) + len(data_payload.get("resources", [])),
+        "recommendations": [
+            "Optimize resource allocation based on complaint patterns",
+            "Implement predictive maintenance for high-usage resources",
+            "Enhance citizen communication during peak complaint periods"
+        ]
+    }
+    
+    return analysis_result
+
+@app.get("/api/admin/analytics/watsonx/insights/{insight_id}")
+async def get_insight_details(
+    insight_id: str,
+    admin_access = Depends(get_admin_access)
+):
+    """Get detailed information about a specific insight"""
+    
+    # Mock detailed insight data
+    insight_details = {
+        "id": insight_id,
+        "type": "optimization",
+        "title": "Resource Allocation Optimization",
+        "description": "Detailed analysis of current resource allocation patterns and optimization opportunities.",
+        "confidence": 92,
+        "impact": "high",
+        "actionable": True,
+        "data": {
+            "current_efficiency": "76%",
+            "potential_improvement": "18%",
+            "affected_resources": 12,
+            "estimated_savings": "$2,400/month"
+        },
+        "detailed_analysis": {
+            "methodology": "Machine learning analysis of historical resource usage patterns",
+            "data_sources": ["complaint_history", "resource_assignments", "resolution_times"],
+            "key_findings": [
+                "Peak demand occurs between 9 AM - 11 AM",
+                "Resource utilization varies by 40% across different districts",
+                "Average response time could be reduced by 23 minutes"
+            ]
+        },
+        "recommended_actions": [
+            "Redistribute 2 personnel from District A to District C",
+            "Implement dynamic scheduling based on demand patterns",
+            "Consider adding mobile resources for peak hours"
+        ]
+    }
+    
+    return insight_details
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

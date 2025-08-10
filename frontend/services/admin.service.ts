@@ -9,6 +9,9 @@ export interface AdminStats {
   resolvedChange: number | null
   highPriority: number
   highPriorityChange: number | null
+  totalResources: number
+  availableResources: number
+  busyResources: number
 }
 
 export interface User {
@@ -23,6 +26,44 @@ export interface User {
   status: 'Active' | 'Inactive'
   complaintsCount: number
   lastActive: string
+}
+
+export interface Resource {
+  id: string
+  name: string
+  type: string
+  serviceCategory: string
+  description?: string
+  availabilityStatus: 'Available' | 'Busy' | 'Maintenance'
+  contactPerson?: string
+  contactPhone?: string
+  contactEmail?: string
+  location?: string
+  capacity?: number
+  hourlyRate?: number
+  activeAssignments: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ResourceAssignment {
+  id: string
+  resource: {
+    id: string
+    name: string
+    type: string
+    serviceCategory: string
+    contactPerson?: string
+    contactPhone?: string
+  }
+  assignedBy: string
+  assignedAt: string
+  status: string
+  startTime?: string
+  endTime?: string
+  estimatedHours?: number
+  actualHours?: number
+  notes?: string
 }
 
 export interface UserFilters {
@@ -40,6 +81,15 @@ export interface ComplaintFilters {
   status?: string
   priority?: string
   service?: string
+}
+
+export interface ResourceFilters {
+  page?: number
+  limit?: number
+  search?: string
+  type_filter?: string
+  service_category?: string
+  availability_status?: string
 }
 
 // API Key configuration
@@ -76,6 +126,58 @@ export const adminService = {
   // Get all complaints (admin only)
   getComplaints: async (filters: ComplaintFilters = {}) => {
     const response = await adminApi.get('/admin/complaints', { params: filters })
+    return response.data
+  },
+
+  // Resource Management
+  getResources: async (filters: ResourceFilters = {}) => {
+    const response = await adminApi.get('/admin/resources', { params: filters })
+    return response.data
+  },
+
+  createResource: async (resourceData: {
+    name: string
+    type: string
+    service_category: string
+    description?: string
+    contact_person?: string
+    contact_phone?: string
+    contact_email?: string
+    location?: string
+    capacity?: number
+    hourly_rate?: number
+  }) => {
+    const response = await adminApi.post('/admin/resources', resourceData)
+    return response.data
+  },
+
+  updateResource: async (resourceId: string, updates: Partial<Resource>) => {
+    const response = await adminApi.put(`/admin/resources/${resourceId}`, updates)
+    return response.data
+  },
+
+  deleteResource: async (resourceId: string) => {
+    const response = await adminApi.delete(`/admin/resources/${resourceId}`)
+    return response.data
+  },
+
+  // Resource Assignment
+  getComplaintResources: async (complaintId: string) => {
+    const response = await adminApi.get(`/admin/complaints/${complaintId}/resources`)
+    return response.data
+  },
+
+  assignResourcesToComplaint: async (complaintId: string, assignmentData: {
+    resource_ids: string[]
+    notes?: string
+    estimated_hours?: number
+  }) => {
+    const response = await adminApi.post(`/admin/complaints/${complaintId}/resources`, assignmentData)
+    return response.data
+  },
+
+  removeResourceFromComplaint: async (complaintId: string, resourceId: string) => {
+    const response = await adminApi.delete(`/admin/complaints/${complaintId}/resources/${resourceId}`)
     return response.data
   },
 
@@ -139,6 +241,20 @@ export const createAdminServiceWithApiKey = (apiKey: string) => {
 
     getComplaints: async (filters: ComplaintFilters = {}) => {
       const response = await customAdminApi.get('/admin/complaints', { params: filters })
+      return response.data
+    },
+
+    getResources: async (filters: ResourceFilters = {}) => {
+      const response = await customAdminApi.get('/admin/resources', { params: filters })
+      return response.data
+    },
+
+    assignResourcesToComplaint: async (complaintId: string, assignmentData: {
+      resource_ids: string[]
+      notes?: string
+      estimated_hours?: number
+    }) => {
+      const response = await customAdminApi.post(`/admin/complaints/${complaintId}/resources`, assignmentData)
       return response.data
     },
 
