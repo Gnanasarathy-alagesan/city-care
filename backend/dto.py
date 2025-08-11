@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class UserUpdate(BaseModel):
@@ -124,3 +124,11 @@ class WatsonXAnalysisRequest(BaseModel):
     includeResources: Optional[bool] = True
     includeUsers: Optional[bool] = True
     timeframe: Optional[str] = "30d"
+
+
+class ComplaintCreateDTO(BaseModel):
+    title: str = Field(..., description="Title of the complaint")
+    description: str = Field(..., description="Detailed description of the issue")
+    service_type: str = Field(..., description="Service category for the complaint")
+    address: str = Field(..., description="Address for the complaint")
+    user_email: str = Field(..., description="Email of the user filing the complaint")

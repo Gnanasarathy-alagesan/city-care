@@ -1,18 +1,15 @@
-import json
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import Optional
 
 from auth import get_admin_access
-from dao import (
-    Complaint,
-    ComplaintImage,
-    ComplaintStatusHistory,
-    Resource,
-    ResourceAssignment,
-    User,
+from dao import Complaint, ComplaintStatusHistory, Resource, ResourceAssignment, User
+from dto import (
+    ComplaintCreateDTO,
+    ResourceAssignmentCreate,
+    ResourceCreate,
+    ResourceUpdate,
 )
-from dto import ResourceAssignmentCreate, ResourceCreate, ResourceUpdate
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from utils import camel_to_snake, get_db
 from watsonx.service import WatsonXService
@@ -238,12 +235,7 @@ async def get_all_complaints_for_admin(
 
 @router.post("/complaint")
 async def create_complaint_on_behalf_of_user(
-    title: str = Form(..., description="Title of the complaint"),
-    description: str = Form(..., description="Detailed description of the issue"),
-    service_type: str = Form(..., description="Service category for the complaint"),
-    location: Optional[str] = Form(None, description="Location data as JSON string"),
-    images: List[UploadFile] = File(default=[], description="Supporting images"),
-    user_email: str = Form(..., description="Email of the user filing the complaint"),
+    payload: ComplaintCreateDTO,
     db: Session = Depends(get_db),
     admin_access=Depends(get_admin_access),
 ):
@@ -261,33 +253,21 @@ async def create_complaint_on_behalf_of_user(
     Returns:
         dict: Created complaint details
     """
-    # Parse location JSON if provided
-    location_data = None
-    if location:
-        try:
-            location_data = json.loads(location)
-        except json.JSONDecodeError:
-            raise HTTPException(
-                status_code=400, detail="Invalid location format. Must be valid JSON."
-            )
-
     # Fetch user by email
     user = None
-    if user_email:
-        user = db.query(User).filter(User.email == user_email).first()
+    if payload.user_email:
+        user = db.query(User).filter(User.email == payload.user_email).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found.")
 
     try:
         # Create complaint
         new_complaint = Complaint(
-            title=title,
-            description=description,
-            service_type=service_type,
+            title=payload.title,
+            description=payload.description,
+            service_type=payload.service_type,
             reporter_id=user.id,
-            location_lat=location_data.get("lat") if location_data else None,
-            location_lng=location_data.get("lng") if location_data else None,
-            location_address=location_data.get("address") if location_data else None,
+            location_address=payload.address,
         )
         db.add(new_complaint)
         db.commit()
@@ -302,17 +282,6 @@ async def create_complaint_on_behalf_of_user(
         )
         db.add(status_history)
 
-        # Handle image uploads
-        image_urls = []
-        for image in images:
-            if image.filename:
-                image_url = f"/uploads/{new_complaint.id}_{image.filename}"
-                image_urls.append(image_url)
-                complaint_image = ComplaintImage(
-                    complaint_id=new_complaint.id, image_url=image_url
-                )
-                db.add(complaint_image)
-
         db.commit()
 
         return {
@@ -320,7 +289,6 @@ async def create_complaint_on_behalf_of_user(
                 "id": new_complaint.id,
                 "title": new_complaint.title,
                 "status": new_complaint.status,
-                "images": image_urls,
             }
         }
 
