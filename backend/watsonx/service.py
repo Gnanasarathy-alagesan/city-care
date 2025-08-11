@@ -1,6 +1,7 @@
 # Mock WatsonX AI Service
 import json
 import os
+import re
 
 from dotenv import load_dotenv
 from ibm_watsonx_ai.credentials import Credentials
@@ -11,6 +12,51 @@ parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 dotenv_path = os.path.join(parent_dir, ".env.local")
 
 load_dotenv(dotenv_path=dotenv_path)
+
+
+def extract_full_json(generated_text):
+    # Step 1: Try direct JSON parse
+    try:
+        return json.loads(generated_text)
+    except json.JSONDecodeError:
+        pass
+
+    # Step 2: Find the first '{' and match balanced braces
+    start = generated_text.find('{')
+    if start == -1:
+        return {"error": "No JSON found", "raw": generated_text}
+
+    brace_count = 0
+    end = None
+    for i, ch in enumerate(generated_text[start:], start=start):
+        if ch == '{':
+            brace_count += 1
+        elif ch == '}':
+            brace_count -= 1
+            if brace_count == 0:
+                end = i + 1
+                break
+
+    if end:
+        json_str = generated_text[start:end]
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            pass
+
+    # Step 3: Fallback — merge smaller blocks
+    blocks = re.findall(r'\{[\s\S]*?\}', generated_text)
+    merged = {}
+    for block in blocks:
+        try:
+            obj = json.loads(block)
+            merged.update(obj)
+        except json.JSONDecodeError:
+            continue
+    if merged:
+        return {"response": merged}
+
+    return {"error": "No valid JSON found", "raw": generated_text}
 
 
 class WatsonXService:
@@ -173,22 +219,5 @@ class WatsonXService:
             },
         )
 
-        # Extract and parse response
         generated_text = response.get("results", [{}])[0].get("generated_text", "{}")
-        # Step 2: Locate the JSON boundaries
-        start = generated_text.find("{")
-        end = generated_text.rfind("}") + 1  # +1 to include the closing brace
-
-        if start == -1 or end == -1:
-            raise ValueError("No valid JSON object found in generated_text")
-
-        json_str = generated_text[start:end]
-        try:
-            parsed_json = json.loads(json_str)
-        except json.JSONDecodeError:
-            parsed_json = {
-                "error": "Model output was not valid JSON",
-                "raw": generated_text,
-            }
-
-        return parsed_json
+        return extract_full_json(generated_text)
