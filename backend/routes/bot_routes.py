@@ -1,5 +1,6 @@
 import uuid
 
+import httpx
 from auth import get_admin_access, get_current_user
 from dao import Complaint, Resource, User
 from dto import BotConfig, BotMessage, WatsonXAnalysisRequest
@@ -337,3 +338,249 @@ async def get_detailed_insight_information(
     }
 
     return insight_details
+
+
+@router.post("bot/chat")
+async def chat_with_citizen_rights_agent(
+    message_data: BotMessage, current_user: User = Depends(get_current_user)
+):
+    """
+    Chat with the AI-powered Citizen Rights & Schemes Assistant.
+
+    This endpoint connects to an actual AI agent that provides information about:
+    - Citizen rights and legal protections
+    - Government schemes and benefits
+    - Eligibility criteria for various programs
+    - Application processes and documentation
+    - Legal remedies and complaint procedures
+
+    Args:
+        message_data: Chat message data including:
+            - message: User's question about rights or schemes
+            - history: Optional conversation history for context
+        current_user: Authenticated user
+
+    Returns:
+        dict: AI agent response including:
+            - message: Agent's informative response
+            - confidence: Confidence score of the response
+            - intent: Detected user intent (rights_query, scheme_info, etc.)
+            - entities: Extracted entities (scheme names, rights categories)
+            - suggestedActions: Suggested follow-up actions
+            - sources: Relevant sources or references
+    """
+    if not BOT_CONFIG["isEnabled"]:
+        raise HTTPException(
+            status_code=503, detail="Rights Agent service is currently disabled"
+        )
+
+    try:
+        # Prepare the payload for the AI agent
+        agent_payload = {
+            "message": message_data.message,
+            "context": "citizen_rights_and_schemes",
+            "user_id": str(current_user.id),
+            "user_district": current_user.district,
+            "conversation_history": message_data.history or [],
+            "system_prompt": """You are a knowledgeable AI assistant specializing in citizen rights and government schemes. 
+            Provide accurate, helpful information about:
+            - Constitutional rights and legal protections
+            - Government welfare schemes and benefits
+            - Eligibility criteria and application processes
+            - Documentation requirements
+            - Grievance redressal mechanisms
+            - Legal remedies and procedures
+            
+            Always provide specific, actionable information and cite relevant sources when possible.""",
+        }
+
+        # Make HTTP request to actual AI agent endpoint
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Replace with your actual AI agent endpoint URL
+            agent_endpoint = "https://api.your-ai-service.com/v1/chat"
+
+            # Add authentication headers if required
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {BOT_CONFIG.get('ai_api_key', 'your-api-key')}",
+            }
+
+            response = await client.post(
+                agent_endpoint, json=agent_payload, headers=headers
+            )
+
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"AI agent service error: {response.status_code}",
+                )
+
+            agent_response = response.json()
+
+            # Extract and format the response
+            bot_response = {
+                "message": agent_response.get(
+                    "response",
+                    "I apologize, but I couldn't process your request at the moment.",
+                ),
+                "confidence": agent_response.get("confidence", 0.8),
+                "intent": agent_response.get("intent", "general_inquiry"),
+                "entities": agent_response.get("entities", []),
+                "suggestedActions": agent_response.get(
+                    "suggested_actions",
+                    [
+                        "Ask about specific schemes",
+                        "Learn about eligibility criteria",
+                        "Get application guidance",
+                    ],
+                ),
+                "sources": agent_response.get("sources", []),
+            }
+
+            return bot_response
+
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=504, detail="AI agent service timeout. Please try again."
+        )
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=502, detail=f"Failed to connect to AI agent service: {str(e)}"
+        )
+    except Exception as e:
+        print(f"AI agent service error: {str(e)}")
+
+        # Fallback to local rights and schemes knowledge
+        fallback_response = generate_local_rights_response(
+            message_data.message, current_user
+        )
+        return fallback_response
+
+
+def generate_local_rights_response(message: str, user: User) -> dict:
+    """
+    Generate a response using local knowledge base when external AI service is unavailable.
+
+    Args:
+        message: User's message
+        user: Current user for personalization
+
+    Returns:
+        dict: Formatted response with rights and schemes information
+    """
+    message_lower = message.lower()
+
+    rights_keywords = {
+        "education": {
+            "response": "🎓 **Right to Education**: Every child aged 6-14 has the right to free and compulsory education under Article 21A. Key schemes include:\n\n• **Sarva Shiksha Abhiyan**: Universal elementary education\n• **Mid-Day Meal Scheme**: Free meals in government schools\n• **Scholarship schemes** for SC/ST/OBC students\n• **Beti Bachao Beti Padhao**: Girl child education promotion",
+            "actions": [
+                "Check scholarship eligibility",
+                "Find nearby schools",
+                "Apply for education schemes",
+            ],
+        },
+        "health": {
+            "response": "🏥 **Right to Health**: While not explicitly fundamental, health is a directive principle. Key schemes:\n\n• **Ayushman Bharat**: Health insurance up to ₹5 lakh\n• **Janani Suraksha Yojana**: Maternal health benefits\n• **National Health Mission**: Primary healthcare\n• **ESIS**: Employee health insurance",
+            "actions": [
+                "Check Ayushman Bharat eligibility",
+                "Find empaneled hospitals",
+                "Apply for health schemes",
+            ],
+        },
+        "employment": {
+            "response": "💼 **Right to Work**: Guaranteed under MGNREGA and various employment schemes:\n\n• **MGNREGA**: 100 days guaranteed employment\n• **Pradhan Mantri Rojgar Protsahan Yojana**: Employment generation\n• **Skill India**: Vocational training programs\n• **Stand Up India**: SC/ST/Women entrepreneurship",
+            "actions": [
+                "Apply for MGNREGA",
+                "Check skill development programs",
+                "Start your business",
+            ],
+        },
+        "food": {
+            "response": "🍽️ **Right to Food**: Ensured through Public Distribution System:\n\n• **National Food Security Act**: Subsidized food grains\n• **Antyodaya Anna Yojana**: For poorest families\n• **Pradhan Mantri Garib Kalyan Anna Yojana**: Free food grains\n• **Integrated Child Development Services**: Nutrition for children",
+            "actions": [
+                "Get ration card",
+                "Check PDS eligibility",
+                "Apply for food schemes",
+            ],
+        },
+        "housing": {
+            "response": "🏠 **Right to Shelter**: Housing schemes for all:\n\n• **Pradhan Mantri Awas Yojana**: Housing for all by 2022\n• **Indira Awas Yojana**: Rural housing\n• **Credit Linked Subsidy Scheme**: Home loan subsidies\n• **Rental Housing Scheme**: Affordable rental housing",
+            "actions": [
+                "Apply for PM Awas Yojana",
+                "Check housing subsidies",
+                "Find affordable housing",
+            ],
+        },
+        "pension": {
+            "response": "👴 **Social Security Rights**: Pension and social security schemes:\n\n• **National Social Assistance Programme**: Old age pension\n• **Atal Pension Yojana**: Guaranteed pension\n• **Pradhan Mantri Vaya Vandana Yojana**: Senior citizen pension\n• **Widow Pension Scheme**: Support for widows",
+            "actions": [
+                "Apply for old age pension",
+                "Check pension eligibility",
+                "Calculate pension amount",
+            ],
+        },
+    }
+
+    # Detect intent and generate response
+    detected_intent = "general_inquiry"
+    response_data = None
+
+    for category, data in rights_keywords.items():
+        if category in message_lower or any(
+            keyword in message_lower
+            for keyword in [category, f"{category} scheme", f"{category} right"]
+        ):
+            detected_intent = f"{category}_inquiry"
+            response_data = data
+            break
+
+    if response_data:
+        return {
+            "message": response_data["response"]
+            + f"\n\n📍 *Information personalized for {user.district} district*",
+            "confidence": 0.85,
+            "intent": detected_intent,
+            "entities": [{"entity": "topic", "value": category}],
+            "suggestedActions": response_data["actions"],
+            "sources": [
+                "National Portal of India",
+                "Ministry of Rural Development",
+                "Constitution of India",
+            ],
+        }
+    else:
+        # General response for unmatched queries
+        return {
+            "message": """🇮🇳 **Welcome to Citizen Rights & Schemes Assistant!**
+
+I can help you learn about your fundamental rights and government schemes. Here are some areas I can assist with:
+
+**🎯 Popular Topics:**
+• Education rights and scholarships
+• Healthcare schemes (Ayushman Bharat)
+• Employment programs (MGNREGA)
+• Housing schemes (PM Awas Yojana)
+• Food security (PDS, Ration Card)
+• Social security and pensions
+
+**💡 How to ask:**
+• "Tell me about education rights"
+• "What housing schemes am I eligible for?"
+• "How to apply for Ayushman Bharat?"
+
+What would you like to know about?""",
+            "confidence": 0.9,
+            "intent": "welcome",
+            "entities": [],
+            "suggestedActions": [
+                "Learn about education rights",
+                "Check healthcare schemes",
+                "Explore employment programs",
+                "Find housing assistance",
+            ],
+            "sources": [
+                "Government of India",
+                "National Portal",
+                "Constitution of India",
+            ],
+        }
