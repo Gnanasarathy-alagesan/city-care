@@ -60,7 +60,7 @@ def extract_full_json(generated_text):
 
 
 class WatsonXService:
-    def __init__(self):
+    def __init__(self, model=None):
         self.intents = {
             "file_complaint": ["complaint", "report", "issue", "problem", "file"],
             "check_status": ["status", "check", "update", "progress"],
@@ -113,10 +113,32 @@ class WatsonXService:
                         }},
                         "recommendations": []
                     }}
-                """
+                """,
+            "analyze_priority": lambda input: f"""
+                    You are an AI assistant for a public works department. You are given a description related to infrastructure conditions such as roads, bridges, or public facilities.
+
+                    Issue Priority:
+                    {input['description']}
+
+                    Analyze the description carefully and assign a single priority flag based on severity for repair or attention.
+
+                    Severity categories:
+                    - High: urgent attention needed, safety risk present.
+                    - Medium: noticeable damage but not immediately dangerous.
+                    - Low: minor issues, can be scheduled later.
+
+                    **IMPORTANT:** Respond **ONLY** with exactly one of these phrases and nothing else (no explanations, no additional text, no punctuation):
+                    High
+                    Medium
+                    Low
+
+                    Your response must be a single line with one of the above exactly as written.
+
+                    Now assign the priority:
+            """
         }
         # WatsonX config
-        self.model_id = os.getenv("WATSONX_MODEL")
+        self.model_id = model or os.getenv("WATSONX_MODEL")
         self.project_id = os.getenv("PROJECT_ID")
         self.credentials = Credentials(
             url=os.getenv("WATSONX_URL"), api_key=os.getenv("WATSONX_APIKEY")
@@ -221,3 +243,24 @@ class WatsonXService:
 
         generated_text = response.get("results", [{}])[0].get("generated_text", "{}")
         return extract_full_json(generated_text)
+
+    def analyze_priority(self, description: str) -> str:
+
+        input_payload = {
+            "description": description,
+        }
+
+        prompt_text = self.prompts["analyze_priority"](input_payload)
+
+        response = self.model.generate(
+            prompt=prompt_text,
+            params={
+                "decoding_method": "greedy",
+                "max_new_tokens": 10,
+                "temperature": 0,
+                "stop_sequences": ["\n"]
+            },
+        )
+        with open("watsonx_response.json", "w") as f:
+            json.dump(response, f, indent=2)
+        return str(response.get("results", [{}])[0].get("generated_text", "").strip())

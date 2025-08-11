@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from auth import get_current_user
+from watsonx.service import WatsonXService
 from dao import Complaint, ComplaintImage, ComplaintStatusHistory, Service, User
 from dto import UserUpdate
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -295,7 +296,8 @@ async def submit_new_complaint(
         except:
             pass
 
-    # Create complaint
+    watsonx_service = WatsonXService()
+    complaint_priority = watsonx_service.analyze_priority(description=description).strip()
     new_complaint = Complaint(
         title=title,
         description=description,
@@ -304,6 +306,7 @@ async def submit_new_complaint(
         location_lat=location_data.get("lat") if location_data else None,
         location_lng=location_data.get("lng") if location_data else None,
         location_address=location_data.get("address") if location_data else None,
+        priority=complaint_priority
     )
 
     db.add(new_complaint)
