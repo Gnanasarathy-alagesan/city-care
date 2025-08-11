@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime, timezone, timedelta
 
 from auth import get_admin_access, get_current_user
 from dao import Complaint, Resource, User
@@ -136,72 +135,28 @@ async def get_watsonx_system_analytics(
             - trends: Identified trends in complaint patterns
             - recommendations: AI recommendations for system improvement
     """
-    # Gather current system data
-    now = datetime.now(timezone.utc)
-    month_start = now - timedelta(days=30)
 
-    total_complaints = db.query(Complaint).count()
-    resolved_complaints = (
-        db.query(Complaint).filter(Complaint.status == "Resolved").count()
-    )
-    pending_complaints = (
-        db.query(Complaint)
-        .filter(Complaint.status.in_(["Open", "In Progress"]))
-        .count()
-    )
-
-    # Calculate average resolution time (mock calculation)
-    avg_resolution_time = 4.2
-
-    # Resource metrics
-    total_resources = db.query(Resource).filter(Resource.is_active == True).count()
-    busy_resources = (
-        db.query(Resource)
-        .filter(Resource.is_active == True, Resource.availability_status == "Busy")
-        .count()
+    total_complaints = [obj.to_dict() for obj in db.query(Complaint).all()]
+    total_resources = [
+        obj.to_dict()
+        for obj in db.query(Resource).filter(Resource.is_active == True).all()
+    ]
+    busy_resources = [
+        obj.to_dict()
+        for obj in (
+            db.query(Resource)
+            .filter(Resource.is_active == True, Resource.availability_status == "Busy")
+            .all()
+        )
+    ]
+    # # Get WatsonX analysis
+    watsonx_analysis = watsonx_service.get_analytical_insights(
+        complaints_data=total_complaints,
+        resources_data=total_resources,
+        busy_resources_data=busy_resources,
     )
 
-    resource_utilization = (
-        (busy_resources / total_resources * 100) if total_resources > 0 else 0
-    )
-
-    # Mock citizen satisfaction and cost efficiency
-    citizen_satisfaction = 4.2
-    cost_efficiency = 87.5
-
-    # Prepare data for WatsonX analysis
-    system_data = {
-        "totalComplaints": total_complaints,
-        "resolvedComplaints": resolved_complaints,
-        "avgResolutionTime": avg_resolution_time,
-        "resourceUtilization": resource_utilization,
-        "citizenSatisfaction": citizen_satisfaction,
-        "costEfficiency": cost_efficiency,
-        "activeResources": total_resources,
-        "pendingComplaints": pending_complaints,
-    }
-
-    # Get WatsonX analysis
-    watsonx_analysis = watsonx_service.analyze_system_data(system_data)
-
-    # Prepare response
-    analytics_response = {
-        "overview": {
-            "totalComplaints": total_complaints,
-            "resolvedComplaints": resolved_complaints,
-            "avgResolutionTime": avg_resolution_time,
-            "resourceUtilization": resource_utilization,
-            "citizenSatisfaction": citizen_satisfaction,
-            "costEfficiency": cost_efficiency,
-            "activeResources": total_resources,
-            "pendingComplaints": pending_complaints,
-        },
-        "insights": watsonx_analysis["insights"],
-        "trends": watsonx_analysis["trends"],
-        "recommendations": watsonx_analysis["recommendations"],
-    }
-
-    return analytics_response
+    return watsonx_analysis
 
 
 @router.post("/admin/analytics/watsonx/generate")

@@ -14,6 +14,7 @@ from sqlalchemy import (
     create_engine,
 )
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.inspection import inspect
 from sqlalchemy.orm import relationship, sessionmaker
 
 Base = declarative_base()
@@ -38,8 +39,23 @@ COMPLAINT_RESOURCES = Table(
 )
 
 
+class BaseModel:
+    class Config:
+        orm_mode = True
+
+    def to_dict(self):
+        """Convert a SQLAlchemy model instance into a dict."""
+        result = {}
+        for c in inspect(self).mapper.column_attrs:
+            value = getattr(self, c.key)
+            if isinstance(value, datetime):
+                value = value.isoformat()
+            result[c.key] = value
+        return result
+
+
 # Database Models
-class User(Base):
+class User(BaseModel, Base):
     __tablename__ = "users"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -58,7 +74,7 @@ class User(Base):
     complaints = relationship("Complaint", back_populates="reporter")
 
 
-class Complaint(Base):
+class Complaint(BaseModel, Base):
     __tablename__ = "complaints"
 
     id = Column(
@@ -88,7 +104,7 @@ class Complaint(Base):
     )
 
 
-class ComplaintStatusHistory(Base):
+class ComplaintStatusHistory(BaseModel, Base):
     __tablename__ = "complaint_status_history"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -101,7 +117,7 @@ class ComplaintStatusHistory(Base):
     complaint = relationship("Complaint", back_populates="status_history")
 
 
-class ComplaintImage(Base):
+class ComplaintImage(BaseModel, Base):
     __tablename__ = "complaint_images"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -112,7 +128,7 @@ class ComplaintImage(Base):
     complaint = relationship("Complaint", back_populates="images")
 
 
-class Service(Base):
+class Service(BaseModel, Base):
     __tablename__ = "services"
 
     id = Column(String, primary_key=True)
@@ -122,7 +138,7 @@ class Service(Base):
     examples = Column(Text, nullable=False)  # JSON string
 
 
-class Resource(Base):
+class Resource(BaseModel, Base):
     __tablename__ = "resources"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -150,7 +166,7 @@ class Resource(Base):
     )
 
 
-class ResourceAssignment(Base):
+class ResourceAssignment(BaseModel, Base):
     __tablename__ = "resource_assignments"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))

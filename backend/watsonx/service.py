@@ -1,5 +1,16 @@
 # Mock WatsonX AI Service
-import uuid
+import json
+import os
+
+from dotenv import load_dotenv
+from ibm_watsonx_ai.credentials import Credentials
+from ibm_watsonx_ai.foundation_models import ModelInference
+
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+dotenv_path = os.path.join(parent_dir, ".env.local")
+
+load_dotenv(dotenv_path=dotenv_path)
 
 
 class WatsonXService:
@@ -22,6 +33,53 @@ class WatsonXService:
             "goodbye": "Thank you for using CityCare! Have a great day and don't hesitate to reach out if you need any assistance.",
             "fallback": "I'm not sure I understand that request. I can help you with filing complaints, checking status, city services information, and administrative tasks. Could you please rephrase your question?",
         }
+
+        self.prompts = {
+            "analytical_insights": lambda input: f"""
+                    You are an AI system for analyzing Public Works Department operational data. It contains the details of the complaints, resources, and resources that are busy.
+                    Here is the input data:
+                    {json.dumps(input, indent=2)}
+
+                    Task:
+                    Analyze the data and produce a JSON object with:
+                    - overview: totals and key metrics
+                    - insights: list of detected issues or opportunities (empty array if none)
+                    - trends: complaintTrend, resolutionTrend, satisfactionTrend
+                    - recommendations: actionable suggestions for improvement and easy resolving of the issues.
+
+                    Output must be "valid JSON" - so i can convert it to json in python. It must not have extra text, keep it in this format:
+                    {{
+                        "overview": {{
+                            "totalComplaints": <int>,
+                            "resolvedComplaints": <int>,
+                            "avgResolutionTime": <float>,
+                            "resourceUtilization": <float>,
+                            "citizenSatisfaction": <float>,
+                            "costEfficiency": <float>,
+                            "activeResources": <int>,
+                            "pendingComplaints": <int>
+                        }},
+                        "insights": [],
+                        "trends": {{
+                            "complaintTrend": "<string>",
+                            "resolutionTrend": "<string>",
+                            "satisfactionTrend": "<string>"
+                        }},
+                        "recommendations": []
+                    }}
+                """
+        }
+        # WatsonX config
+        self.model_id = os.getenv("WATSONX_MODEL")
+        self.project_id = os.getenv("PROJECT_ID")
+        self.credentials = Credentials(
+            url=os.getenv("WATSONX_URL"), api_key=os.getenv("WATSONX_APIKEY")
+        )
+        self.model = ModelInference(
+            model_id=self.model_id,
+            credentials=self.credentials,
+            project_id=self.project_id,
+        )
 
     def analyze_message(self, message: str, history: list[dict] = None) -> dict:
         message_lower = message.lower()
@@ -84,120 +142,53 @@ class WatsonXService:
             "suggestedActions": suggested_actions,
         }
 
-    def analyze_system_data(self, data: dict) -> dict:
-        """Analyze system data and generate insights using WatsonX-like logic"""
+    def get_analytical_insights(
+        self, complaints_data: list, resources_data: list, busy_resources_data: list
+    ) -> dict:
+        """
+        Generates analytical insights using WatsonX AI by combining complaint & resource data.
 
-        # Extract key metrics
-        total_complaints = data.get("totalComplaints", 0)
-        resolved_complaints = data.get("resolvedComplaints", 0)
-        avg_resolution_time = data.get("avgResolutionTime", 0)
-        resource_utilization = data.get("resourceUtilization", 0)
-        citizen_satisfaction = data.get("citizenSatisfaction", 0)
+        Args:
+            complaints_data (dict): Dictionary of complaint data from API.
+            resources_data (dict): Dictionary of resource data from API.
 
-        insights = []
-        recommendations = []
-
-        # Generate insights based on data patterns
-        if total_complaints > 100:
-            if resolved_complaints / total_complaints < 0.8:
-                insights.append(
-                    {
-                        "id": str(uuid.uuid4()),
-                        "type": "alert",
-                        "title": "Low Resolution Rate Detected",
-                        "description": f"Current resolution rate is {(resolved_complaints/total_complaints)*100:.1f}%, which is below the target of 80%.",
-                        "confidence": 92,
-                        "impact": "high",
-                        "actionable": True,
-                        "data": {
-                            "currentRate": f"{(resolved_complaints/total_complaints)*100:.1f}%",
-                            "targetRate": "80%",
-                            "gap": f"{80 - (resolved_complaints/total_complaints)*100:.1f}%",
-                        },
-                    }
-                )
-                recommendations.append(
-                    "Increase resource allocation to high-priority complaints to improve resolution rate"
-                )
-
-        if avg_resolution_time > 5:
-            insights.append(
-                {
-                    "id": str(uuid.uuid4()),
-                    "type": "optimization",
-                    "title": "Resolution Time Optimization Opportunity",
-                    "description": f"Average resolution time of {avg_resolution_time} days exceeds the target of 5 days.",
-                    "confidence": 87,
-                    "impact": "medium",
-                    "actionable": True,
-                    "data": {
-                        "currentTime": f"{avg_resolution_time} days",
-                        "targetTime": "5 days",
-                        "improvement": f"{avg_resolution_time - 5} days",
-                    },
-                }
-            )
-            recommendations.append(
-                "Implement automated routing and priority-based assignment to reduce resolution time"
-            )
-
-        if resource_utilization > 85:
-            insights.append(
-                {
-                    "id": str(uuid.uuid4()),
-                    "type": "prediction",
-                    "title": "Resource Capacity Warning",
-                    "description": f"Resource utilization at {resource_utilization}% indicates potential capacity constraints.",
-                    "confidence": 89,
-                    "impact": "high",
-                    "actionable": True,
-                    "data": {
-                        "currentUtilization": f"{resource_utilization}%",
-                        "threshold": "85%",
-                        "risk": "capacity shortage",
-                    },
-                }
-            )
-            recommendations.append(
-                "Consider expanding resource capacity or optimizing current resource allocation"
-            )
-
-        if citizen_satisfaction < 4.0:
-            insights.append(
-                {
-                    "id": str(uuid.uuid4()),
-                    "type": "recommendation",
-                    "title": "Citizen Satisfaction Improvement Needed",
-                    "description": f"Current satisfaction score of {citizen_satisfaction}/5 is below expectations.",
-                    "confidence": 84,
-                    "impact": "medium",
-                    "actionable": True,
-                    "data": {
-                        "currentScore": f"{citizen_satisfaction}/5",
-                        "targetScore": "4.0/5",
-                        "improvement": f"{4.0 - citizen_satisfaction:.1f} points",
-                    },
-                }
-            )
-            recommendations.append(
-                "Implement citizen feedback system and improve communication during complaint resolution"
-            )
-
-        # Determine trends
-        trends = {
-            "complaintTrend": "increasing" if total_complaints > 50 else "stable",
-            "resolutionTrend": (
-                "improving"
-                if resolved_complaints / total_complaints > 0.8
-                else "declining"
-            ),
-            "satisfactionTrend": (
-                "stable" if citizen_satisfaction >= 4.0 else "declining"
-            ),
+        Returns:
+            dict: JSON-formatted analytics containing overview, insights, trends, and recommendations.
+        """
+        # Structure data for the prompt
+        input_payload = {
+            "complaints": complaints_data,
+            "resources": resources_data,
+            "busy_resources": busy_resources_data,
         }
 
-        return {
-            "insights": insights,
-            "recommendations": recommendations,
-            "trends": trends,
-        }
+        # Call WatsonX
+        response = self.model.generate(
+            prompt=self.prompts["analytical_insights"](input_payload),
+            params={
+                "decoding_method": "greedy",
+                "max_new_tokens": 800,
+                "min_new_tokens": 50,
+                "temperature": 0,
+            },
+        )
+
+        # Extract and parse response
+        generated_text = response.get("results", [{}])[0].get("generated_text", "{}")
+        # Step 2: Locate the JSON boundaries
+        start = generated_text.find("{")
+        end = generated_text.rfind("}") + 1  # +1 to include the closing brace
+
+        if start == -1 or end == -1:
+            raise ValueError("No valid JSON object found in generated_text")
+
+        json_str = generated_text[start:end]
+        try:
+            parsed_json = json.loads(json_str)
+        except json.JSONDecodeError:
+            parsed_json = {
+                "error": "Model output was not valid JSON",
+                "raw": generated_text,
+            }
+
+        return parsed_json

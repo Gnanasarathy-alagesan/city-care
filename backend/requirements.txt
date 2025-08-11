@@ -9,3 +9,4 @@ python-decouple==3.8
 aiofiles==23.2.1
 Pillow==10.1.0
 PyJWT
+ibm-watsonx-ai

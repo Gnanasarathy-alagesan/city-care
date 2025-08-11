@@ -1,9 +1,11 @@
 import logging
+import os
 from datetime import datetime, timezone
 
 import uvicorn
 from dao import SessionLocal
 from database import init_default_data
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes.admin_routes import router as admin_router
@@ -12,6 +14,7 @@ from routes.bot_routes import router as bot_router
 from routes.user_routes import router as user_router
 from watsonx.service import WatsonXService
 
+load_dotenv("../.env.local")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -36,7 +39,7 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=os.getenv("CORS_ORIGINS").split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
