@@ -1,4 +1,5 @@
 import json
+import shutil
 import uuid
 from pathlib import Path
 from typing import List, Optional
@@ -12,6 +13,10 @@ from utils import get_db
 
 router = APIRouter(prefix="/api", tags=["User Operations"])
 
+BASE_DIR = Path(__file__).resolve().parent  # /backend
+UPLOAD_DIR = BASE_DIR.parent / "uploads"  # /uploads/complaints
+
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 @router.get("/services")
 async def fetch_available_services(db: Session = Depends(get_db)):
@@ -318,8 +323,11 @@ async def submit_new_complaint(
     image_urls = []
     for image in images:
         if image.filename:
-            # Mock image URL - in production, upload to cloud storage
-            image_url = f"/uploads/{new_complaint.id}_{image.filename}"
+            safe_filename = f"{new_complaint.id}_{image.filename}"
+            file_path = UPLOAD_DIR / safe_filename
+            with file_path.open("wb") as buffer:
+                shutil.copyfileobj(image.file, buffer)
+            image_url = f"/uploads/{safe_filename}"
             image_urls.append(image_url)
 
             complaint_image = ComplaintImage(

@@ -8,6 +8,8 @@ from database import init_default_data
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
 from routes.admin_routes import router as admin_router
 from routes.auth_routes import router as auth_router
 from routes.bot_routes import router as bot_router
@@ -35,6 +37,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
+app.mount("/uploads", StaticFiles(directory="./uploads"), name="uploads")
 
 # CORS middleware
 app.add_middleware(

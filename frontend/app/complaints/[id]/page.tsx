@@ -47,7 +47,7 @@ export default function ComplaintDetailPage({ params }: { params: { id: string }
             reporter: found.reporter, // not provided by API yet
             assignedTo: found.assignedTo || 'N/A',
             estimatedResolution: 'N/A', // placeholder
-            images: [], // no images yet
+            images: found.images, // no images yet
             aiSuggestion: {
               priority: 'Medium',
               reasoning: 'AI analytics not available yet — placeholder.',
@@ -150,9 +150,9 @@ export default function ComplaintDetailPage({ params }: { params: { id: string }
                   <h4 className="font-semibold text-gray-900 mb-2">Description</h4>
                   <p className="text-gray-700">{complaint.description}</p>
                 </div>
-                
+
                 <Separator />
-                
+
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="flex items-center gap-2">
                     <FileText className="w-4 h-4 text-gray-500" />
@@ -173,7 +173,6 @@ export default function ComplaintDetailPage({ params }: { params: { id: string }
                 </div>
               </CardContent>
             </Card>
-
             {/* Photos */}
             {complaint.images.length > 0 && (
               <Card>
@@ -188,7 +187,7 @@ export default function ComplaintDetailPage({ params }: { params: { id: string }
                     {complaint.images.map((image, index) => (
                       <div key={index} className="relative">
                         <Image
-                          src={image || "/placeholder.svg"}
+                          src={`http://localhost:8000${image}`}
                           alt={`Complaint photo ${index + 1}`}
                           width={300}
                           height={200}
@@ -243,24 +242,24 @@ export default function ComplaintDetailPage({ params }: { params: { id: string }
                   <h4 className="font-semibold text-gray-900 mb-2">Recommended Priority</h4>
                   {getPriorityBadge(complaint.aiSuggestion.priority)}
                 </div>
-                
+
                 <div>
                   <h4 className="font-semibold text-gray-900 mb-2">Reasoning</h4>
                   <p className="text-sm text-gray-700">{complaint.aiSuggestion.reasoning}</p>
                 </div>
-                
+
                 <div>
                   <h4 className="font-semibold text-gray-900 mb-2">Estimated Cost</h4>
                   <p className="text-sm text-gray-700">{complaint.aiSuggestion.estimatedCost}</p>
                 </div>
-                
+
                 <div>
                   <h4 className="font-semibold text-gray-900 mb-2">Recommended Action</h4>
                   <p className="text-sm text-gray-700">{complaint.aiSuggestion.recommendedAction}</p>
                 </div>
               </CardContent>
             </Card>
-          
+
 
             {/* Reporter Info */}
             <Card>
