@@ -50,7 +50,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [isAdmin, setIsAdmin] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState<string | null>(null)
 
   useEffect(() => {
     const rawUser = {
@@ -70,6 +70,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         isAdmin: rawUser.isAdmin,
       });
     }
+    setIsAdmin(localStorage.getItem("isAdmin"))
   }, []);
 
   const handleLogout = () => {
@@ -86,7 +87,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     );
   }
 
-  const navigation = user.isAdmin
+  const navigation = isAdmin === "true"
     ? [
         { name: "Dashboard", href: "/admin", icon: Home },
         { name: "Complaints", href: "/admin/complaints", icon: FileText },
