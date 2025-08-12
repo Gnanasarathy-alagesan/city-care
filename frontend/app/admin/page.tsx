@@ -193,7 +193,6 @@ export default function AdminDashboardPage() {
         <Tabs defaultValue="complaints" className="space-y-6">
           <TabsList>
             <TabsTrigger value="complaints">Recent Complaints</TabsTrigger>
-            <TabsTrigger value="map">Map View</TabsTrigger>
             <TabsTrigger value="ai">AI Insights</TabsTrigger>
           </TabsList>
 
@@ -294,24 +293,6 @@ export default function AdminDashboardPage() {
                       </div>
                     </div>
                   ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="map" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Complaint Map View</CardTitle>
-                <CardDescription>Geographic distribution of complaints and resources</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-96 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <div className="text-center">
-                    <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">Map view coming soon</p>
-                    <p className="text-sm text-gray-500">Interactive map showing complaint locations and resource deployment</p>
-                  </div>
                 </div>
               </CardContent>
             </Card>

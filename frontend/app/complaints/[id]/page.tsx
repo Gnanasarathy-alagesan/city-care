@@ -45,7 +45,7 @@ export default function ComplaintDetailPage({ params }: { params: { id: string }
             date: found.date,
             location: found.location || { address: '', coordinates: {} },
             reporter: found.reporter, // not provided by API yet
-            assignedTo: found.assignedTo || 'N/A',
+            assignedTo: found?.resources[0]?.name || 'N/A',
             estimatedResolution: 'N/A', // placeholder
             images: found.images, // no images yet
             aiSuggestion: {
@@ -93,7 +93,7 @@ export default function ComplaintDetailPage({ params }: { params: { id: string }
       case 'High':
         return <Badge className="priority-high">High</Badge>
       default:
-        return <Badge variant="secondary">{priority}</Badge>
+        return <Badge className="priority-medium">Medium</Badge>
     }
   }
 

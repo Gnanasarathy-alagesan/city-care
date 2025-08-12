@@ -72,7 +72,7 @@ export default function AdminComplaintsPage() {
       case "High":
         return <Badge className="priority-high">High</Badge>;
       default:
-        return <Badge variant="secondary">{priority}</Badge>;
+        return <Badge className="priority-medium">Medium</Badge>;
     }
   };
 

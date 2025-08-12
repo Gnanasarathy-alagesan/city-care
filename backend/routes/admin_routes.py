@@ -16,8 +16,6 @@ from watsonx.service import WatsonXService
 
 router = APIRouter(prefix="/api/admin", tags=["Admin Operations"])
 
-# Initialize WatsonX service
-watsonx_service = WatsonXService()
 
 
 @router.get("/dashboard/stats")
@@ -162,7 +160,11 @@ async def get_all_complaints_for_admin(
         joinedload(Complaint.images),
         joinedload(Complaint.resources),
     )
-
+    complaints_list = [complaint.to_dict() for complaint in query.all()]
+    resources_query = db.query(Resource).filter(Resource.is_active == True).all()
+    resources = [resource.to_dict() for resource in resources_query]
+    watsonx_service = WatsonXService()
+    ai_insights = watsonx_service.get_ai_insights(complaints=complaints_list, resources=resources)
     if search:
         query = query.filter(Complaint.title.contains(search))
     if status and status != "all":
@@ -230,7 +232,7 @@ async def get_all_complaints_for_admin(
             }
         )
 
-    return {"complaints": complaint_list, "total": total, "page": page}
+    return {"complaints": complaint_list, "total": total, "page": page, "ai_insights": ai_insights}
 
 
 @router.post("/complaint")

@@ -136,6 +136,7 @@ class Service(BaseModel, Base):
     description = Column(Text, nullable=False)
     icon = Column(String(50), nullable=False)
     examples = Column(Text, nullable=False)  # JSON string
+    resources = relationship("Resource", back_populates="service")
 
 
 class Resource(BaseModel, Base):
@@ -145,8 +146,11 @@ class Resource(BaseModel, Base):
     name = Column(String(100), nullable=False)
     type = Column(String(50), nullable=False)  # Equipment, Personnel, Vehicle, etc.
     service_category = Column(
-        String(50), nullable=False
+        String(100),
+        ForeignKey("services.name"),  # FK to Service.name
+        nullable=True
     )  # roads, water, electricity, etc.
+    service = relationship("Service", back_populates="resources")
     description = Column(Text, nullable=True)
     availability_status = Column(
         String(20), default="Available"

@@ -135,7 +135,56 @@ class WatsonXService:
                     Your response must be a single line with one of the above exactly as written.
 
                     Now assign the priority:
-            """
+                """,
+            "ai_insights": lambda input: f"""
+                    You are an AI assistant for the Public Works Department.
+                    Your task is to analyze the provided citizen complaints and available resources 
+                    to produce actionable operational insights, predictive analytics, optimized resource allocation, 
+                    and automated recommendations.
+
+                    INPUT DATA:
+                    Complaints (JSON list):
+                    {input["complaints"]}
+
+                    Resources (JSON list):
+                    {input["resources"]}
+
+                    REQUIREMENTS:
+                    1. **Trend Analysis**: Summarize key trends and recurring issues from the complaints.
+                    2. **Urgent Issues**: Identify the most urgent problems requiring immediate action.
+                    3. **Predictive Analytics**: Forecast likely future issues or complaint patterns based on the given data.
+                    4. **Resource Optimization**: Recommend the most efficient allocation of current resources to address both immediate and predicted issues.
+                    5. **Automated Recommendations**: Suggest proactive measures, preventative maintenance, or policy changes to reduce future complaints.
+                    6. **Gap Analysis**: Flag areas where resources are insufficient or mismatched to needs.
+
+                    OUTPUT FORMAT:
+                    Provide the output strictly as JSON in the following structure:
+
+                    {{
+                    "summary": "Brief high-level overview of complaint patterns",
+                    "urgent_issues": [
+                        {{ "issue": "Description", "frequency": <number>, "urgency_reason": "Why urgent" }}
+                    ],
+                    "predictive_analytics": [
+                        {{ "predicted_issue": "Description", "confidence": "<percentage>", "expected_timeframe": "e.g., 2 weeks" }}
+                    ],
+                    "recommended_actions": [
+                        {{ "action": "Description", "resources_assigned": ["resource_id", ...], "expected_impact": "Short description" }}
+                    ],
+                    "resource_optimization": [
+                        {{ "resource_id": "ID", "optimized_use": "Description of best allocation" }}
+                    ],
+                    "resource_gaps": [
+                        {{ "gap": "Description of missing resource or shortfall" }}
+                    ]
+                    }}
+
+                    CONSTRAINTS:
+                    - Base all analysis strictly on the input data provided.
+                    - Be concise but specific.
+                    - Ensure all recommendations are practical and implementable.
+                    - Do not invent data or make unsupported assumptions.
+                """
         }
         # WatsonX config
         self.model_id = model or os.getenv("WATSONX_MODEL")
@@ -261,6 +310,23 @@ class WatsonXService:
                 "stop_sequences": ["\n"]
             },
         )
-        with open("watsonx_response.json", "w") as f:
-            json.dump(response, f, indent=2)
         return str(response.get("results", [{}])[0].get("generated_text", "").strip())
+    
+    def get_ai_insights(self, complaints:list, resources:list) -> dict:
+        
+        input_payload = {
+            "complaints": complaints,
+            "resources": resources,
+        }
+        response = self.model.generate(
+            prompt=self.prompts["ai_insights"](input_payload),
+            params={
+                "decoding_method": "greedy",
+                "max_new_tokens": 1000,
+                "min_new_tokens": 50,
+                "temperature": 0,
+            },
+        )
+
+        generated_text = response.get("results", [{}])[0].get("generated_text", "{}")
+        return generated_text
