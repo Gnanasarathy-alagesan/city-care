@@ -7,7 +7,7 @@ import { Toaster } from '@/components/ui/toaster'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'CityCare - Report. Resolve. Revive Your City',
+  title: 'CityCare - Report. Resolve. Restore Your City',
   description: 'Citizen issue reporting and resolution platform for Public Works Department',
     generator: 'v0.dev'
 }
