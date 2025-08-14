@@ -13,7 +13,7 @@ from watsonx.constants import BOT_CONFIG
 from watsonx.service import WatsonXService
 
 load_dotenv(".env.local")
-CIVIC_AGENT_API_KEY = os.getenv("CIVIC_AGENT_API_KEY")
+WATSONX_APIKEY = os.getenv("WATSONX_APIKEY")
 
 router = APIRouter(prefix="/api", tags=["Bot & AI Operations"])
 import logging
@@ -355,7 +355,7 @@ async def chat_with_citizen_rights_agent(
             token_response = await client.post(
                 "https://iam.cloud.ibm.com/identity/token",
                 data={
-                    "apikey": CIVIC_AGENT_API_KEY,
+                    "apikey": WATSONX_APIKEY,
                     "grant_type": "urn:ibm:params:oauth:grant-type:apikey",
                 },
             )
