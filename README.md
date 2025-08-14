@@ -1,336 +1,336 @@
-# 🏙️ CityCare - Citizen Issue Reporting Platform
+# 🏙️ CityCare - Smart City Complaint Management System
 
-A comprehensive platform that bridges the gap between citizens and the Public Works Department, making it easier to report issues and track their resolution.
+CityCare is a comprehensive full-stack application that enables citizens to report city issues and provides administrators with AI-powered insights for efficient city management. Built with modern technologies and integrated with IBM WatsonX AI for intelligent recommendations.
 
-## 📋 Table of Contents
+## 🚀 Features
 
-- [Features](#features)
-- [Architecture](#architecture)
-- [Quick Start](#quick-start)
-- [Project Structure](#project-structure)
-- [Configuration](#configuration)
-- [Development](#development)
-- [Production Deployment](#production-deployment)
-- [API Documentation](#api-documentation)
-- [Troubleshooting](#troubleshooting)
+### For Citizens
+- **Report Issues**: Submit complaints about city infrastructure, roads, utilities, and public services
+- **Photo Upload**: Attach images to provide visual evidence of issues
+- **Real-time Status**: Track the status of submitted complaints
+- **AI Assistant**: Get help with government schemes and citizen rights through WatsonX chatbot
 
-## ✨ Features
+### For Administrators
+- **Dashboard**: Comprehensive overview of all complaints and city metrics
+- **Interactive Map**: Visualize complaint locations on San Francisco street map
+- **Analytics**: Detailed insights and trends analysis
+- **AI Recommendations**: WatsonX-powered suggestions for issue resolution
+- **Complaint Management**: Efficient workflow for processing and resolving issues
 
-### 🎯 **Core Features**
-- **Citizen Complaint Management**: Report, track, and resolve city issues
-- **Real-time Status Updates**: Live tracking of complaint resolution
-- **Admin Dashboard**: Comprehensive management interface
-- **File Upload Support**: Attach photos to complaints
-- **Geolocation Integration**: Location-based issue reporting
-- **AI-Powered Suggestions**: Smart categorization and priority assignment
+## 🛠️ Technology Stack
 
-### 🔐 **Security & Authentication**
-- JWT-based authentication
-- Role-based access control (Admin/User)
-- Secure password hashing
-- CORS protection
+### Frontend
+- **Next.js 14** - React framework with App Router
+- **React 19** - Latest React with modern features
+- **TypeScript** - Type-safe development
+- **Tailwind CSS** - Utility-first CSS framework
+- **Radix UI** - Accessible component primitives
+- **Leaflet** - Interactive maps without external API dependencies
 
-### 📱 **User Experience**
-- Responsive design for all devices
-- Modern Material UI components
-- Intuitive navigation and workflows
-- Real-time notifications
+### Backend
+- **FastAPI** - Modern Python web framework
+- **SQLAlchemy** - SQL toolkit and ORM
+- **SQLite** - Lightweight database for development
+- **JWT Authentication** - Secure user authentication
+- **IBM WatsonX AI** - AI-powered insights and recommendations
 
-## 🏗️ Architecture
+## 📋 Prerequisites
 
-\`\`\`
-CityCare Platform
-├── Frontend (Next.js + React)
-│   ├── User Interface
-│   ├── Admin Dashboard
-│   └── Authentication
-├── Backend (FastAPI + Python)
-│   ├── REST API
-│   ├── Authentication
-│   ├── File Upload
-│   └── AI Integration
-├── Database (PostgreSQL)
-│   ├── User Management
-│   ├── Complaint Tracking
-│   └── Audit Logs
-└── Infrastructure (Docker)
-    ├── Container Orchestration
-    ├── Reverse Proxy (Nginx)
-    └── Environment Management
-\`\`\`
+Before running CityCare, ensure you have:
+
+- **Node.js** (version 18 or higher)
+- **npm** (comes with Node.js)
+- **Python 3.8+** and **pip3**
+- **Git** (for cloning the repository)
+- **4GB RAM** (recommended for smooth operation)
+
+### System Requirements
+- **OS**: Linux, macOS, or Windows
+- **Ports**: 3000 (frontend), 8000 (backend) should be available
+- **Disk Space**: At least 1GB free space
 
 ## 🚀 Quick Start
 
-### Prerequisites
-
-- **Docker** (v20.10+)
-- **Docker Compose** (v2.0+)
-- **Git**
-
 ### 1. Clone the Repository
-
 \`\`\`bash
 git clone <repository-url>
 cd citycare
 \`\`\`
 
 ### 2. Run the Setup Script
-
 \`\`\`bash
 chmod +x setup.sh
 ./setup.sh
 \`\`\`
 
 The setup script will:
-- ✅ Check system requirements
+- ✅ Check system requirements (Node.js, Python)
 - ✅ Create environment configuration
-- ✅ Set up necessary directories
-- ✅ Build and start all services
+- ✅ Create Python virtual environment
+- ✅ Install backend dependencies
+- ✅ Install frontend dependencies
+- ✅ Initialize SQLite database
+- ✅ Start backend and frontend servers
 - ✅ Verify service health
 
 ### 3. Access the Application
 
+Once setup is complete, access:
+
 - **🌐 Frontend**: http://localhost:3000
 - **🔧 Backend API**: http://localhost:8000
-- **📊 API Docs**: http://localhost:8000/docs
-- **🗄️ Database**: localhost:5432
+- **📊 API Documentation**: http://localhost:8000/docs
 
-### 4. Default Credentials
+### Default Admin Credentials
+- **Username**: `admin`
+- **Password**: `admin`
 
-- **Admin Login**: `admin` / `admin`
-- **Regular Users**: Register through the application
+## 📖 Usage Guide
 
-## 📁 Project Structure
-
-\`\`\`
-citycare/
-├── frontend/                 # Next.js React Application
-│   ├── app/                 # App Router pages
-│   ├── components/          # Reusable components
-│   ├── services/           # API service layer
-│   ├── lib/                # Utilities and configurations
-│   └── public/             # Static assets
-├── backend/                 # FastAPI Python Application
-│   ├── main.py             # Main application file
-│   ├── models.py           # Database models
-│   ├── auth.py             # Authentication utilities
-│   └── uploads/            # File upload directory
-├── nginx/                   # Nginx configuration
-├── init-db/                # Database initialization scripts
-├── docker-compose.yml      # Multi-service orchestration
-├── setup.sh               # Environment setup script
-└── .env                   # Environment variables
-\`\`\`
-
-## ⚙️ Configuration
-
-### Environment Variables
-
-The application uses environment variables for configuration. Key variables include:
+### Setup Script Commands
 
 \`\`\`bash
-# Database
-POSTGRES_DB=citycare
-POSTGRES_USER=citycare
-POSTGRES_PASSWORD=citycare123
-
-# Backend
-SECRET_KEY=your-secret-key
-BACKEND_PORT=8000
-
-# Frontend
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
-FRONTEND_PORT=3000
-\`\`\`
-
-### Customization
-
-1. **Database Configuration**: Modify PostgreSQL settings in `.env`
-2. **API Endpoints**: Update backend URLs in frontend services
-3. **UI Theming**: Customize Tailwind CSS configuration
-4. **Feature Flags**: Enable/disable features via environment variables
-
-## 🛠️ Development
-
-### Running in Development Mode
-
-\`\`\`bash
-# Start all services
+# Start the application
 ./setup.sh
 
-# View logs
-./setup.sh --logs
+# Show help
+./setup.sh --help
 
-# Stop services
+# Stop all services
 ./setup.sh --stop
 
 # Restart services
 ./setup.sh --restart
+
+# View service logs
+./setup.sh --logs [backend|frontend]
+
+# Check service status
+./setup.sh --status
+
+# Clean up everything
+./setup.sh --clean
 \`\`\`
 
-### Individual Service Development
+### Manual Development Commands
 
-#### Frontend Development
+\`\`\`bash
+# Backend (from project root)
+cd backend
+source venv/bin/activate
+python app.py
+
+# Frontend (from project root)
+cd frontend
+npm run dev
+\`\`\`
+
+## 🏗️ Project Structure
+
+\`\`\`
+citycare/
+├── frontend/                 # Next.js React application
+│   ├── app/                 # App Router pages
+│   ├── components/          # React components
+│   ├── services/           # API service layers
+│   └── public/             # Static assets
+├── backend/                 # FastAPI Python application
+│   ├── routes/             # API route handlers
+│   ├── models/             # Database models
+│   ├── services/           # Business logic
+│   ├── venv/              # Python virtual environment
+│   └── dto.py              # Data transfer objects
+├── components/             # Shared React components
+├── setup.sh              # Automated setup script
+├── backend.log           # Backend server logs
+├── frontend.log          # Frontend server logs
+└── README.md             # This file
+\`\`\`
+
+## 🔧 Configuration
+
+### Environment Variables
+
+The setup script creates environment files with default values:
+
+**Backend (.env)**:
+\`\`\`env
+SECRET_KEY=your-super-secret-key
+BACKEND_PORT=8000
+ALLOWED_ORIGINS=http://localhost:3000
+DATABASE_URL=sqlite:///./citycare.db
+DEBUG=True
+\`\`\`
+
+**Frontend (.env.local)**:
+\`\`\`env
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
+NEXT_PUBLIC_ADMIN_API_KEY=admin-key-123
+\`\`\`
+
+### Custom Configuration
+
+1. **Database**: Uses SQLite by default for simplicity
+2. **Ports**: Modify in environment files
+3. **AI Integration**: Configure WatsonX API keys in backend environment
+4. **Maps**: Customize city focus in map components
+
+## 🗺️ API Documentation
+
+### Authentication Endpoints
+- `POST /api/auth/login` - User login
+- `POST /api/auth/register` - User registration
+- `POST /api/auth/refresh` - Token refresh
+
+### Complaint Endpoints
+- `GET /api/complaints` - List complaints
+- `POST /api/complaints` - Create complaint
+- `GET /api/complaints/{id}` - Get complaint details
+- `PUT /api/complaints/{id}` - Update complaint
+
+### Admin Endpoints
+- `GET /api/admin/dashboard` - Dashboard metrics
+- `GET /api/admin/analytics` - Analytics data
+- `POST /api/admin/watsonx/recommendations` - AI recommendations
+
+### WatsonX Integration
+- `POST /api/watsonx/chat` - AI chatbot interaction
+- `GET /api/watsonx/insights` - AI-generated insights
+
+## 🧪 Development
+
+### Local Development Setup
+
+1. **Frontend Development**:
 \`\`\`bash
 cd frontend
 npm install
 npm run dev
 \`\`\`
 
-#### Backend Development
+2. **Backend Development**:
 \`\`\`bash
 cd backend
+source venv/bin/activate
 pip install -r requirements.txt
-uvicorn main:app --reload
+python app.py
 \`\`\`
 
-### Database Management
+### Code Style
 
-\`\`\`bash
-# Access PostgreSQL
-docker-compose exec postgres psql -U citycare -d citycare
+- **Frontend**: ESLint + Prettier configuration
+- **Backend**: Black + isort for Python formatting
+- **TypeScript**: Strict mode enabled
+- **Commits**: Conventional commit messages
 
-# Backup database
-docker-compose exec postgres pg_dump -U citycare citycare > backup.sql
-
-# Restore database
-docker-compose exec -T postgres psql -U citycare -d citycare < backup.sql
-\`\`\`
-
-## 🚀 Production Deployment
-
-### Using Docker Compose
-
-1. **Update Environment Variables**:
-   \`\`\`bash
-   cp .env .env.production
-   # Edit .env.production with production values
-   \`\`\`
-
-2. **Enable Production Profile**:
-   \`\`\`bash
-   export COMPOSE_PROFILES=production
-   docker-compose up -d
-   \`\`\`
-
-3. **SSL Configuration**:
-   - Place SSL certificates in `nginx/ssl/`
-   - Update nginx configuration for HTTPS
-
-### Cloud Deployment Options
-
-- **AWS**: ECS, EKS, or EC2 with Docker
-- **Google Cloud**: Cloud Run, GKE, or Compute Engine
-- **Azure**: Container Instances, AKS, or Virtual Machines
-- **DigitalOcean**: App Platform or Droplets
-
-## 📚 API Documentation
-
-### Interactive Documentation
-
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-
-### Key Endpoints
-
-#### Authentication
-- `POST /api/auth/login` - User login
-- `POST /api/auth/register` - User registration
-- `GET /api/auth/me` - Get current user
-
-#### Complaints
-- `GET /api/complaints` - List user complaints
-- `POST /api/complaints` - Create new complaint
-- `GET /api/complaints/{id}` - Get complaint details
-
-#### Admin
-- `GET /api/admin/dashboard/stats` - Dashboard statistics
-- `GET /api/admin/users` - List all users
-- `PUT /api/admin/complaints/{id}/assign` - Assign complaint
-
-## 🔧 Troubleshooting
+## 🚨 Troubleshooting
 
 ### Common Issues
 
-#### Port Conflicts
+**Port Already in Use**
 \`\`\`bash
 # Check what's using the port
 lsof -i :3000
-lsof -i :8000
-lsof -i :5432
-
-# Kill processes if needed
+# Kill the process
 kill -9 <PID>
 \`\`\`
 
-#### Database Connection Issues
+**Python Virtual Environment Issues**
 \`\`\`bash
-# Check database logs
-docker-compose logs postgres
-
-# Restart database
-docker-compose restart postgres
+# Recreate virtual environment
+cd backend
+rm -rf venv
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 \`\`\`
 
-#### Frontend Build Issues
+**Node.js Issues**
 \`\`\`bash
-# Clear Next.js cache
+# Clear npm cache
+npm cache clean --force
+# Delete node_modules and reinstall
 cd frontend
-rm -rf .next
-npm run build
+rm -rf node_modules package-lock.json
+npm install
 \`\`\`
 
-#### Backend Issues
+**Database Issues**
 \`\`\`bash
-# Check backend logs
-docker-compose logs backend
-
-# Restart backend
-docker-compose restart backend
+# Reset database
+rm backend/citycare.db
+./setup.sh --restart
 \`\`\`
 
-### Service Management Commands
+### Service Health Checks
 
 \`\`\`bash
-# Check service status
+# Check backend health
+curl http://localhost:8000/api/health
+
+# Check frontend
+curl http://localhost:3000
+
+# Check if services are running
 ./setup.sh --status
+\`\`\`
 
+## 📊 Monitoring
+
+### Service Logs
+\`\`\`bash
 # View all logs
 ./setup.sh --logs
 
-# Clean up everything
-./setup.sh --clean
+# View specific service logs
+./setup.sh --logs backend
+./setup.sh --logs frontend
 
-# Get help
-./setup.sh --help
+# View log files directly
+tail -f backend.log
+tail -f frontend.log
 \`\`\`
 
-### Performance Optimization
-
-1. **Database Indexing**: Ensure proper indexes on frequently queried columns
-2. **Caching**: Implement Redis for session and data caching
-3. **CDN**: Use CDN for static assets in production
-4. **Load Balancing**: Scale horizontally with multiple backend instances
+### Performance Monitoring
+- Frontend: Built-in Next.js analytics
+- Backend: FastAPI automatic metrics
+- Database: SQLite lightweight performance
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Development Guidelines
+- Follow TypeScript/Python best practices
+- Write tests for new features
+- Update documentation
+- Ensure local setup works
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🆘 Support
+## 🙏 Acknowledgments
+
+- **IBM WatsonX** - AI and machine learning capabilities
+- **OpenStreetMap** - Map data and tiles
+- **Vercel** - Deployment and hosting inspiration
+- **FastAPI** - Modern Python web framework
+- **Next.js** - React framework
+
+## 📞 Support
 
 For support and questions:
-- Create an issue in the repository
-- Check the troubleshooting section
-- Review the API documentation
+
+1. **Documentation**: Check this README and API docs
+2. **Issues**: Create a GitHub issue
+3. **Discussions**: Use GitHub Discussions
+4. **Email**: Contact the development team
 
 ---
 
-**Made with ❤️ for better cities and communities**
+**Built with ❤️ for smarter cities and better citizen services**
