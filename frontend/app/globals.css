@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Added Leaflet CSS imports for map functionality */
+@import "leaflet/dist/leaflet.css";
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -80,4 +83,17 @@
 
 .priority-high {
   @apply bg-red-100 text-red-800;
+}
+
+/* Added custom styles for Leaflet map markers */
+.leaflet-container {
+  font-family: inherit;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 0.5rem;
+}
+
+.leaflet-popup-content {
+  margin: 0;
 }

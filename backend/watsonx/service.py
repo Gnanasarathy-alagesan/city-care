@@ -22,16 +22,16 @@ def extract_full_json(generated_text):
         pass
 
     # Step 2: Find the first '{' and match balanced braces
-    start = generated_text.find('{')
+    start = generated_text.find("{")
     if start == -1:
         return {"error": "No JSON found", "raw": generated_text}
 
     brace_count = 0
     end = None
     for i, ch in enumerate(generated_text[start:], start=start):
-        if ch == '{':
+        if ch == "{":
             brace_count += 1
-        elif ch == '}':
+        elif ch == "}":
             brace_count -= 1
             if brace_count == 0:
                 end = i + 1
@@ -45,7 +45,7 @@ def extract_full_json(generated_text):
             pass
 
     # Step 3: Fallback — merge smaller blocks
-    blocks = re.findall(r'\{[\s\S]*?\}', generated_text)
+    blocks = re.findall(r"\{[\s\S]*?\}", generated_text)
     merged = {}
     for block in blocks:
         try:
@@ -135,7 +135,7 @@ class WatsonXService:
                     Your response must be a single line with one of the above exactly as written.
 
                     Now assign the priority:
-            """
+            """,
         }
         # WatsonX config
         self.model_id = model or os.getenv("WATSONX_MODEL")
@@ -258,9 +258,7 @@ class WatsonXService:
                 "decoding_method": "greedy",
                 "max_new_tokens": 10,
                 "temperature": 0,
-                "stop_sequences": ["\n"]
+                "stop_sequences": ["\n"],
             },
         )
-        with open("watsonx_response.json", "w") as f:
-            json.dump(response, f, indent=2)
         return str(response.get("results", [{}])[0].get("generated_text", "").strip())

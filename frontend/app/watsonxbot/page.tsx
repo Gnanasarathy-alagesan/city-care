@@ -16,18 +16,14 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { toast } from "@/hooks/use-toast";
 import {
   Bot,
   User,
   Send,
   MessageCircle,
-  Clock,
   Brain,
   Zap,
   TrendingUp,
-  Trash2,
-  Download,
   Scale,
   Users,
   BookOpen,
@@ -45,26 +41,15 @@ interface ChatMessage {
   confidence?: number;
 }
 
-interface ChatHistory {
-  id: string;
-  title: string;
-  messages: ChatMessage[];
-  createdAt: string;
-  updatedAt: string;
-}
-
 export default function CitizenRightsAgentPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [chatHistory, setChatHistory] = useState<ChatHistory[]>([]);
-  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     initializeBot();
-    loadChatHistory();
   }, []);
 
   useEffect(() => {
@@ -87,77 +72,6 @@ export default function CitizenRightsAgentPage() {
     };
     setMessages([welcomeMessage]);
     setLoading(false);
-  };
-
-  const loadChatHistory = () => {
-    const savedHistory = localStorage.getItem("chatHistory");
-    if (savedHistory) {
-      setChatHistory(JSON.parse(savedHistory));
-    }
-  };
-
-  const saveChatHistory = (history: ChatHistory[]) => {
-    localStorage.setItem("chatHistory", JSON.stringify(history));
-    setChatHistory(history);
-  };
-
-  const startNewChat = () => {
-    if (messages.length > 1) {
-      const chatTitle =
-        messages.find((m) => m.type === "user")?.message.slice(0, 50) + "..." ||
-        "New Chat";
-      const newChat: ChatHistory = {
-        id: Date.now().toString(),
-        title: chatTitle,
-        messages: messages,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      const updatedHistory = [newChat, ...chatHistory];
-      saveChatHistory(updatedHistory);
-    }
-
-    setCurrentChatId(null);
-    initializeBot();
-  };
-
-  const loadChat = (chat: ChatHistory) => {
-    setCurrentChatId(chat.id);
-    setMessages(chat.messages);
-  };
-
-  const deleteChat = (chatId: string) => {
-    const updatedHistory = chatHistory.filter((chat) => chat.id !== chatId);
-    saveChatHistory(updatedHistory);
-
-    if (currentChatId === chatId) {
-      initializeBot();
-      setCurrentChatId(null);
-    }
-  };
-
-  const clearAllHistory = () => {
-    localStorage.removeItem("chatHistory");
-    setChatHistory([]);
-    if (currentChatId) {
-      initializeBot();
-      setCurrentChatId(null);
-    }
-    toast({
-      title: "Success",
-      description: "All chat history has been cleared",
-    });
-  };
-
-  const exportChatHistory = () => {
-    const dataStr = JSON.stringify(chatHistory, null, 2);
-    const dataBlob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `chat-history-${new Date().toISOString().split("T")[0]}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
   };
 
   const sendMessage = async (message: string) => {
@@ -190,19 +104,6 @@ export default function CitizenRightsAgentPage() {
       };
 
       setMessages((prev) => [...prev, botMessage]);
-
-      if (currentChatId) {
-        const updatedHistory = chatHistory.map((chat) =>
-          chat.id === currentChatId
-            ? {
-                ...chat,
-                messages: [...messages, userMessage, botMessage],
-                updatedAt: new Date().toISOString(),
-              }
-            : chat,
-        );
-        saveChatHistory(updatedHistory);
-      }
     } catch (error) {
       console.error("Failed to send message:", error);
       const errorMessage: ChatMessage = {
@@ -230,10 +131,6 @@ export default function CitizenRightsAgentPage() {
       hour: "2-digit",
       minute: "2-digit",
     });
-  };
-
-  const formatDate = (timestamp: string) => {
-    return new Date(timestamp).toLocaleDateString();
   };
 
   if (loading) {
@@ -275,28 +172,24 @@ export default function CitizenRightsAgentPage() {
             {/* Chat Interface */}
             <div className="lg:col-span-3">
               <Card className="h-[600px] flex flex-col">
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-3 flex-shrink-0">
                   <div className="flex items-center justify-between">
                     <div>
                       <CardTitle className="flex items-center gap-2">
                         <MessageCircle className="h-5 w-5" />
-                        {currentChatId ? "Chat History" : "New Chat"}
+                        Chat with Rights Agent
                       </CardTitle>
                       <CardDescription>
                         Ask about your rights, government schemes, benefits, and
                         public services
                       </CardDescription>
                     </div>
-                    <Button onClick={startNewChat} variant="outline" size="sm">
-                      New Chat
-                    </Button>
                   </div>
                 </CardHeader>
 
-                <CardContent className="flex-1 flex flex-col p-0">
-                  {/* Messages */}
-                  <ScrollArea className="flex-1 p-4">
-                    <div className="space-y-4">
+                <CardContent className="flex-1 flex flex-col p-0 min-h-0">
+                  <ScrollArea className="flex-1 px-4 min-h-0">
+                    <div className="space-y-4 py-4">
                       {messages.map((message) => (
                         <div
                           key={message.id}
@@ -377,7 +270,7 @@ export default function CitizenRightsAgentPage() {
                   </ScrollArea>
 
                   {/* Input */}
-                  <div className="p-4 border-t">
+                  <div className="p-4 border-t flex-shrink-0">
                     <div className="flex gap-2">
                       <Input
                         value={inputMessage}
@@ -458,79 +351,6 @@ export default function CitizenRightsAgentPage() {
                 </CardContent>
               </Card>
 
-              {/* Chat History */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Clock className="h-5 w-5" />
-                      Chat History
-                    </CardTitle>
-                    <div className="flex gap-1">
-                      <Button
-                        onClick={exportChatHistory}
-                        variant="ghost"
-                        size="sm"
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        onClick={clearAllHistory}
-                        variant="ghost"
-                        size="sm"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-64">
-                    <div className="space-y-2">
-                      {chatHistory.map((chat) => (
-                        <div
-                          key={chat.id}
-                          className={`p-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors ${
-                            currentChatId === chat.id
-                              ? "bg-blue-50 border border-blue-200"
-                              : "border"
-                          }`}
-                          onClick={() => loadChat(chat)}
-                        >
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-sm font-medium truncate">
-                              {chat.title}
-                            </h4>
-                            <Button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteChat(chat.id);
-                              }}
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            {formatDate(chat.createdAt)}
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            {chat.messages.length} messages
-                          </p>
-                        </div>
-                      ))}
-                      {chatHistory.length === 0 && (
-                        <p className="text-sm text-gray-500 text-center py-4">
-                          No chat history yet
-                        </p>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-
               {/* Session Info */}
               <Card>
                 <CardHeader>
@@ -546,9 +366,6 @@ export default function CitizenRightsAgentPage() {
                   </div>
                   <div className="text-xs text-gray-500">
                     Messages: {messages.length}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    History: {chatHistory.length} chats
                   </div>
                   <Separator />
                   <div className="text-xs text-gray-500">

@@ -5,12 +5,12 @@ from pathlib import Path
 from typing import List, Optional
 
 from auth import get_current_user
-from watsonx.service import WatsonXService
 from dao import Complaint, ComplaintImage, ComplaintStatusHistory, Service, User
 from dto import UserUpdate
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
-from utils import get_db
+from utils import fallback_priority, get_db
+from watsonx.service import WatsonXService
 
 router = APIRouter(prefix="/api", tags=["User Operations"])
 
@@ -18,6 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent  # /backend
 UPLOAD_DIR = BASE_DIR.parent / "uploads"  # /uploads/complaints
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 
 @router.get("/services")
 async def fetch_available_services(db: Session = Depends(get_db)):
@@ -297,7 +298,10 @@ async def submit_new_complaint(
             pass
 
     watsonx_service = WatsonXService()
-    complaint_priority = watsonx_service.analyze_priority(description=description).strip()
+    complaint_priority = watsonx_service.analyze_priority(
+        description=description
+    ).strip()
+    priority = fallback_priority(complaint_priority)
     new_complaint = Complaint(
         title=title,
         description=description,
@@ -306,7 +310,7 @@ async def submit_new_complaint(
         location_lat=location_data.get("lat") if location_data else None,
         location_lng=location_data.get("lng") if location_data else None,
         location_address=location_data.get("address") if location_data else None,
-        priority=complaint_priority
+        priority=priority,
     )
 
     db.add(new_complaint)

@@ -51,3 +51,13 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def fallback_priority(response: str):
+    """
+    Fallback function to handle unexpected responses.
+    """
+    if response.lower() not in ("low", "medium", "high"):
+        return "Medium"
+    else:
+        return response.capitalize()
