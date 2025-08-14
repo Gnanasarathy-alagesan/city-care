@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { watsonxService } from "@/services/bot.service";
+import { MessageFormatter } from "@/components/message-formatter";
 
 interface ChatMessage {
   id: string;
@@ -214,10 +215,17 @@ export default function CitizenRightsAgentPage() {
                                 <User className="h-4 w-4 mt-0.5 flex-shrink-0" />
                               )}
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm whitespace-pre-wrap break-words overflow-hidden">
-                                  {message.message}
-                                </p>
-                                <div className="flex items-center justify-between mt-2">
+                                {message.type === "bot" ? (
+                                  <MessageFormatter
+                                    message={message.message}
+                                    className="text-gray-900"
+                                  />
+                                ) : (
+                                  <p className="text-sm whitespace-pre-wrap break-words overflow-hidden text-white">
+                                    {message.message}
+                                  </p>
+                                )}
+                                <div className="flex items-center justify-between mt-3">
                                   <span className="text-xs opacity-70">
                                     {formatTime(message.timestamp)}
                                   </span>
@@ -234,7 +242,7 @@ export default function CitizenRightsAgentPage() {
                                 {message.intent && message.type === "bot" && (
                                   <Badge
                                     variant="outline"
-                                    className="mt-1 text-xs"
+                                    className="mt-2 text-xs"
                                   >
                                     {message.intent.replace("_", " ")}
                                   </Badge>

@@ -1,8 +1,10 @@
+import os
 import uuid
 
 import httpx
 from auth import get_admin_access, get_current_user
 from dao import Complaint, Resource, User
+from dotenv import load_dotenv
 from dto import BotConfig, BotMessage, WatsonXAnalysisRequest
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -10,48 +12,16 @@ from utils import get_db
 from watsonx.constants import BOT_CONFIG
 from watsonx.service import WatsonXService
 
+load_dotenv(".env.local")
+CIVIC_AGENT_API_KEY = os.getenv("CIVIC_AGENT_API_KEY")
+
 router = APIRouter(prefix="/api", tags=["Bot & AI Operations"])
+import logging
 
 # Initialize WatsonX service
 watsonx_service = WatsonXService()
-
-
-@router.post("/bot/chat")
-async def chat_with_watsonx_bot(
-    message_data: BotMessage, current_user: User = Depends(get_current_user)
-):
-    """
-    Chat with the WatsonX-powered AI assistant for complaint support.
-
-    Args:
-        message_data: Chat message data including:
-            - message: User's message text
-            - history: Optional conversation history
-        current_user: Authenticated user
-
-    Returns:
-        dict: Bot response including:
-            - message: Bot's response text
-            - confidence: Confidence score of the response
-            - intent: Detected user intent
-            - entities: Extracted entities from the message
-            - suggestedActions: Suggested follow-up actions
-    """
-    if not BOT_CONFIG["isEnabled"]:
-        raise HTTPException(status_code=503, detail="Bot service is currently disabled")
-
-    # Get bot response using WatsonX service
-    bot_response = watsonx_service.analyze_message(
-        message_data.message, message_data.history or []
-    )
-
-    return {
-        "message": bot_response["message"],
-        "confidence": bot_response["confidence"],
-        "intent": bot_response["intent"],
-        "entities": bot_response["entities"],
-        "suggestedActions": bot_response["suggestedActions"],
-    }
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 @router.get("/admin/bot/config")
@@ -340,7 +310,7 @@ async def get_detailed_insight_information(
     return insight_details
 
 
-@router.post("bot/chat")
+@router.post("/bot/chat")
 async def chat_with_citizen_rights_agent(
     message_data: BotMessage, current_user: User = Depends(get_current_user)
 ):
@@ -376,53 +346,66 @@ async def chat_with_citizen_rights_agent(
 
     try:
         # Prepare the payload for the AI agent
-        agent_payload = {
-            "message": message_data.message,
-            "context": "citizen_rights_and_schemes",
-            "user_id": str(current_user.id),
-            "user_district": current_user.district,
-            "conversation_history": message_data.history or [],
-            "system_prompt": """You are a knowledgeable AI assistant specializing in citizen rights and government schemes. 
-            Provide accurate, helpful information about:
-            - Constitutional rights and legal protections
-            - Government welfare schemes and benefits
-            - Eligibility criteria and application processes
-            - Documentation requirements
-            - Grievance redressal mechanisms
-            - Legal remedies and procedures
-            
-            Always provide specific, actionable information and cite relevant sources when possible.""",
+        payload_scoring = {
+            "messages": [{"content": message_data.message, "role": "user"}]
         }
 
         # Make HTTP request to actual AI agent endpoint
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # Replace with your actual AI agent endpoint URL
-            agent_endpoint = "https://api.your-ai-service.com/v1/chat"
+            token_response = await client.post(
+                "https://iam.cloud.ibm.com/identity/token",
+                data={
+                    "apikey": CIVIC_AGENT_API_KEY,
+                    "grant_type": "urn:ibm:params:oauth:grant-type:apikey",
+                },
+            )
+            mltoken = token_response.json()["access_token"]
 
-            # Add authentication headers if required
             headers = {
                 "Content-Type": "application/json",
-                "Authorization": f"Bearer {BOT_CONFIG.get('ai_api_key', 'your-api-key')}",
+                "Authorization": "Bearer " + mltoken,
             }
-
-            response = await client.post(
-                agent_endpoint, json=agent_payload, headers=headers
+            # Replace with your actual AI agent endpoint URL
+            agent_endpoint = (
+                "https://us-south.ml.cloud.ibm.com/ml/v4/deployments/"
+                "638274b9-034b-4726-9b47-7fe6f9bfadb3/ai_service?version=2021-05-01"
             )
 
+            response = await client.post(
+                agent_endpoint, json=payload_scoring, headers=headers
+            )
+
+            # Handle API errors with more context
             if response.status_code != 200:
                 raise HTTPException(
                     status_code=502,
-                    detail=f"AI agent service error: {response.status_code}",
+                    detail=(
+                        f"AI agent service error: {response.status_code}, "
+                        f"Response: {response.text}"
+                    ),
                 )
 
             agent_response = response.json()
 
-            # Extract and format the response
+            # Extract message safely
+            choices = agent_response.get("choices", [])
+            message_text = None
+            if choices and isinstance(choices[0], dict):
+                message_data = choices[0].get("message")
+            if isinstance(message_data, dict):
+                # Prefer 'content' or 'text' fields if present
+                message_text = message_data.get("content") or message_data.get("text")
+            elif isinstance(message_data, str):
+                message_text = message_data
+            # Fallback message
+            if not message_text:
+                message_text = (
+                    "I apologize, but I couldn't process your request at the moment."
+                )
+
+            # Build final bot response
             bot_response = {
-                "message": agent_response.get(
-                    "response",
-                    "I apologize, but I couldn't process your request at the moment.",
-                ),
+                "message": message_text,
                 "confidence": agent_response.get("confidence", 0.8),
                 "intent": agent_response.get("intent", "general_inquiry"),
                 "entities": agent_response.get("entities", []),
@@ -437,7 +420,7 @@ async def chat_with_citizen_rights_agent(
                 "sources": agent_response.get("sources", []),
             }
 
-            return bot_response
+        return bot_response
 
     except httpx.TimeoutException:
         raise HTTPException(

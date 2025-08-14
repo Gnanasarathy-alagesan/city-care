@@ -105,7 +105,6 @@ export const watsonxService = {
   }> => {
     const response = await api.post("bot/chat", {
       message,
-      history: history.slice(-5), // Keep last 5 messages for context
     });
     return response.data;
   },

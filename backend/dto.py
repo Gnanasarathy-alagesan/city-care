@@ -105,7 +105,6 @@ class ResourceAssignmentCreate(BaseModel):
 # Bot Models
 class BotMessage(BaseModel):
     message: str
-    history: Optional[list[dict]] = None
 
 
 class BotConfig(BaseModel):
