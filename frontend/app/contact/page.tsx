@@ -30,30 +30,30 @@ export default function ContactPage() {
 
   const teamContacts = [
     {
-      name: "Dr. Sarah Johnson",
+      name: "GnanaSarathy Alagesan",
       role: "Project Director",
-      email: "sarah.johnson@citycare.gov",
+      email: "gnanasarathy@citycare.gov",
       phone: "+1 (555) 101-2001",
       department: "Administration"
     },
     {
-      name: "Michael Chen", 
+      name: "Chelagamsetty Ishitha", 
       role: "Technical Support Lead",
-      email: "michael.chen@citycare.gov",
+      email: "ishitha@citycare.gov",
       phone: "+1 (555) 101-2002",
       department: "Technical Support"
     },
     {
-      name: "Emily Rodriguez",
+      name: "Hariboobaalan Palanisamy",
       role: "User Experience Manager",
-      email: "emily.rodriguez@citycare.gov", 
+      email: "hariboobaalan@citycare.gov", 
       phone: "+1 (555) 101-2003",
       department: "User Support"
     },
     {
-      name: "David Thompson",
+      name: "Mukesh Ravi",
       role: "Data & Analytics Manager",
-      email: "david.thompson@citycare.gov",
+      email: "mukesh@citycare.gov",
       phone: "+1 (555) 101-2004", 
       department: "Analytics"
     }

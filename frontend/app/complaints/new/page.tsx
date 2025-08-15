@@ -212,7 +212,7 @@ export default function NewComplaintPage() {
                 />
                 {aiSuggestions.length > 0 && (
                   <div className="mt-2">
-                    <p className="text-sm text-gray-600 mb-2">AI Suggestions:</p>
+                    <p className="text-sm text-gray-600 mb-2">Suggestions:</p>
                     <div className="space-y-1">
                       {aiSuggestions.map((suggestion, index) => (
                         <button

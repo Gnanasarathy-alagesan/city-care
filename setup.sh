@@ -38,36 +38,17 @@ command_exists() {
 check_requirements() {
     print_status "Checking system requirements..."
     
-    # Check Node.js
-    if ! command_exists node; then
-        print_error "Node.js is not installed. Please install Node.js (v18 or higher)."
-        echo "Visit: https://nodejs.org/"
+    # Check Docker
+    if ! command_exists docker; then
+        print_error "Docker is not installed. Please install Docker first."
+        echo "Visit: https://docs.docker.com/get-docker/"
         exit 1
     fi
     
-    # Check npm
-    if ! command_exists npm; then
-        print_error "npm is not installed. Please install npm."
-        exit 1
-    fi
-    
-    # Check Python
-    if ! command_exists python3; then
-        print_error "Python 3 is not installed. Please install Python 3.8 or higher."
-        echo "Visit: https://python.org/"
-        exit 1
-    fi
-    
-    # Check pip
-    if ! command_exists pip3; then
-        print_error "pip3 is not installed. Please install pip3."
-        exit 1
-    fi
-    
-    # Check Node.js version
-    NODE_VERSION=$(node --version | cut -d'v' -f2 | cut -d'.' -f1)
-    if [ "$NODE_VERSION" -lt 18 ]; then
-        print_error "Node.js version 18 or higher is required. Current version: $(node --version)"
+    # Check Docker Compose
+    if ! command_exists docker-compose && ! docker compose version >/dev/null 2>&1; then
+        print_error "Docker Compose is not installed. Please install Docker Compose first."
+        echo "Visit: https://docs.docker.com/compose/install/"
         exit 1
     fi
     
@@ -80,6 +61,10 @@ check_requirements() {
         print_warning "Port 8000 is already in use. Backend may not start properly."
     fi
     
+    if lsof -Pi :5432 -sTCP:LISTEN -t >/dev/null 2>&1; then
+        print_warning "Port 5432 is already in use. PostgreSQL may not start properly."
+    fi
+    
     print_success "System requirements check completed."
 }
 
@@ -87,86 +72,167 @@ check_requirements() {
 create_env_file() {
     print_status "Creating environment configuration..."
     
-    if [ ! -f backend/.env ]; then
-        cat > backend/.env << EOF
+    if [ ! -f .env ]; then
+        cat > .env << EOF
+# Database Configuration
+POSTGRES_DB=citycare
+POSTGRES_USER=citycare
+POSTGRES_PASSWORD=citycare123
+POSTGRES_PORT=5432
+
 # Backend Configuration
 SECRET_KEY=your-super-secret-key-change-in-production-$(date +%s)
 BACKEND_PORT=8000
-ALLOWED_ORIGINS=http://localhost:3000
+ALLOWED_ORIGINS=http://localhost:3000,http://frontend:3000
 
-# Database Configuration (SQLite for development)
-DATABASE_URL=sqlite:///./citycare.db
-
-# Development Mode
-DEBUG=True
-EOF
-        print_success "Backend environment file created successfully."
-    else
-        print_status "Backend environment file already exists. Skipping creation."
-    fi
-    
-    if [ ! -f frontend/.env.local ]; then
-        cat > frontend/.env.local << EOF
 # Frontend Configuration
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
-NEXT_PUBLIC_ADMIN_API_KEY=admin-key-123
+FRONTEND_PORT=3000
+NODE_ENV=production
+
+# Nginx Configuration (for production)
+NGINX_PORT=80
+NGINX_SSL_PORT=443
+
+# Development/Production Mode
+COMPOSE_PROFILES=development
 EOF
-        print_success "Frontend environment file created successfully."
+        print_success "Environment file (.env) created successfully."
     else
-        print_status "Frontend environment file already exists. Skipping creation."
+        print_status "Environment file (.env) already exists. Skipping creation."
     fi
 }
 
-# Function to install dependencies
-install_dependencies() {
-    print_status "Installing dependencies..."
+# Function to create necessary directories
+create_directories() {
+    print_status "Creating necessary directories..."
     
-    # Install backend dependencies
-    print_status "Installing Python backend dependencies..."
-    cd backend
-    if [ ! -d "venv" ]; then
-        python3 -m venv venv
-        print_success "Python virtual environment created."
-    fi
+    # Create backend uploads directory
+    mkdir -p backend/uploads
     
-    source venv/bin/activate
-    pip install -r requirements.txt
-    print_success "Backend dependencies installed."
-    cd ..
+    # Create nginx configuration directory
+    mkdir -p nginx/ssl
     
-    # Install frontend dependencies
-    print_status "Installing Node.js frontend dependencies..."
-    cd frontend
-    npm install
-    print_success "Frontend dependencies installed."
-    cd ..
+    # Create database initialization directory
+    mkdir -p init-db
+    
+    print_success "Directories created successfully."
 }
 
-# Function to start backend
-start_backend() {
-    print_status "Starting backend server..."
-    cd backend
-    source venv/bin/activate
+# Function to create nginx configuration
+create_nginx_config() {
+    print_status "Creating Nginx configuration..."
     
-    # Initialize database
-    python -c "
-from app import create_app
-from models import db
-app = create_app()
-with app.app_context():
-    db.create_all()
-    print('Database initialized successfully.')
-" 2>/dev/null || print_warning "Database initialization may have failed."
+    if [ ! -f nginx/nginx.conf ]; then
+        cat > nginx/nginx.conf << 'EOF'
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream frontend {
+        server frontend:3000;
+    }
     
-    # Start backend in background
-    nohup python app.py > ../backend.log 2>&1 &
-    BACKEND_PID=$!
-    echo $BACKEND_PID > ../backend.pid
-    cd ..
+    upstream backend {
+        server backend:8000;
+    }
     
-    # Wait for backend to start
+    server {
+        listen 80;
+        server_name localhost;
+        
+        # Frontend routes
+        location / {
+            proxy_pass http://frontend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+        
+        # Backend API routes
+        location /api/ {
+            proxy_pass http://backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+        
+        # Backend uploads
+        location /uploads/ {
+            proxy_pass http://backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+        }
+    }
+}
+EOF
+        print_success "Nginx configuration created successfully."
+    else
+        print_status "Nginx configuration already exists. Skipping creation."
+    fi
+}
+
+# Function to create database initialization script
+create_db_init() {
+    print_status "Creating database initialization script..."
+    
+    if [ ! -f init-db/01-init.sql ]; then
+        cat > init-db/01-init.sql << 'EOF'
+-- CityCare Database Initialization Script
+-- This script runs when the PostgreSQL container starts for the first time
+
+-- Create extensions if needed
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Grant permissions
+GRANT ALL PRIVILEGES ON DATABASE citycare TO citycare;
+
+-- Create indexes for better performance (will be created by SQLAlchemy, but good to have)
+-- These will be created after tables are created by the application
+EOF
+        print_success "Database initialization script created successfully."
+    else
+        print_status "Database initialization script already exists. Skipping creation."
+    fi
+}
+
+# Function to build and start services
+start_services() {
+    print_status "Building and starting CityCare services..."
+    
+    # Build images
+    print_status "Building Docker images..."
+    docker-compose build --no-cache
+    
+    # Start services
+    print_status "Starting services..."
+    docker-compose up -d
+    
+    # Wait for services to be healthy
+    print_status "Waiting for services to be ready..."
+    
+    # Wait for database
+    print_status "Waiting for PostgreSQL to be ready..."
+    timeout=60
+    while [ $timeout -gt 0 ]; do
+        if docker-compose exec -T postgres pg_isready -U citycare -d citycare >/dev/null 2>&1; then
+            break
+        fi
+        sleep 2
+        timeout=$((timeout - 2))
+    done
+    
+    if [ $timeout -le 0 ]; then
+        print_error "PostgreSQL failed to start within 60 seconds."
+        exit 1
+    fi
+    
+    # Wait for backend
     print_status "Waiting for backend to be ready..."
-    timeout=30
+    timeout=60
     while [ $timeout -gt 0 ]; do
         if curl -f http://localhost:8000/api/health >/dev/null 2>&1; then
             break
@@ -176,26 +242,11 @@ with app.app_context():
     done
     
     if [ $timeout -le 0 ]; then
-        print_error "Backend failed to start within 30 seconds. Check backend.log for details."
+        print_error "Backend failed to start within 60 seconds."
         exit 1
     fi
     
-    print_success "Backend server started successfully!"
-}
-
-# Function to start frontend
-start_frontend() {
-    print_status "Starting frontend server..."
-    cd frontend
-    
-    # Build and start frontend in background
-    npm run build
-    nohup npm start > ../frontend.log 2>&1 &
-    FRONTEND_PID=$!
-    echo $FRONTEND_PID > ../frontend.pid
-    cd ..
-    
-    # Wait for frontend to start
+    # Wait for frontend
     print_status "Waiting for frontend to be ready..."
     timeout=60
     while [ $timeout -gt 0 ]; do
@@ -207,88 +258,166 @@ start_frontend() {
     done
     
     if [ $timeout -le 0 ]; then
-        print_error "Frontend failed to start within 60 seconds. Check frontend.log for details."
+        print_error "Frontend failed to start within 60 seconds."
         exit 1
     fi
     
-    print_success "Frontend server started successfully!"
+    print_success "All services are running successfully!"
 }
 
 # Function to show service status
 show_status() {
+    print_status "Service Status:"
+    docker-compose ps
+    
     echo ""
     print_success "CityCare Application is now running!"
     echo ""
     echo "🌐 Frontend: http://localhost:3000"
     echo "🔧 Backend API: http://localhost:8000"
     echo "📊 API Documentation: http://localhost:8000/docs"
+    echo "🗄️  Database: localhost:5432"
     echo ""
     echo "Default Admin Credentials:"
     echo "  Username: admin"
     echo "  Password: admin"
     echo ""
-    echo "Log files:"
-    echo "  Backend: backend.log"
-    echo "  Frontend: frontend.log"
-    echo ""
-    print_status "To stop the application, run: ./setup.sh --stop"
-    print_status "To view logs, run: ./setup.sh --logs"
-}
-
-# Function to stop services
-stop_services() {
-    print_status "Stopping CityCare services..."
-    
-    if [ -f backend.pid ]; then
-        BACKEND_PID=$(cat backend.pid)
-        if kill -0 $BACKEND_PID 2>/dev/null; then
-            kill $BACKEND_PID
-            print_success "Backend server stopped."
-        fi
-        rm -f backend.pid
-    fi
-    
-    if [ -f frontend.pid ]; then
-        FRONTEND_PID=$(cat frontend.pid)
-        if kill -0 $FRONTEND_PID 2>/dev/null; then
-            kill $FRONTEND_PID
-            print_success "Frontend server stopped."
-        fi
-        rm -f frontend.pid
-    fi
-    
-    # Kill any remaining processes on ports 3000 and 8000
-    pkill -f "node.*3000" 2>/dev/null || true
-    pkill -f "python.*8000" 2>/dev/null || true
-    
-    print_success "All services stopped successfully."
-}
-
-# Function to show logs
-show_logs() {
-    if [ "$2" = "backend" ]; then
-        tail -f backend.log
-    elif [ "$2" = "frontend" ]; then
-        tail -f frontend.log
-    else
-        print_status "Showing both backend and frontend logs..."
-        tail -f backend.log frontend.log
-    fi
+    print_status "To stop the application, run: docker-compose down"
+    print_status "To view logs, run: docker-compose logs -f"
 }
 
 # Function to handle cleanup on exit
 cleanup() {
     if [ $? -ne 0 ]; then
         print_error "Setup failed. Cleaning up..."
-        stop_services >/dev/null 2>&1 || true
+        docker-compose down >/dev/null 2>&1 || true
     fi
+}
+
+# Function to setup backend development environment
+setup_backend_dev() {
+    print_status "Setting up backend development environment..."
+    
+    cd backend
+    
+    # Check if Python 3.8+ is installed
+    if ! command_exists python3; then
+        print_error "Python 3 is not installed. Please install Python 3.8 or higher."
+        exit 1
+    fi
+    
+    # Create virtual environment if it doesn't exist
+    if [ ! -d "venv" ]; then
+        print_status "Creating Python virtual environment..."
+        python3 -m venv venv
+        print_success "Virtual environment created."
+    fi
+    
+    # Activate virtual environment and install dependencies
+    print_status "Installing Python dependencies..."
+    source venv/bin/activate
+    pip install --upgrade pip
+    pip install -r requirements.txt
+    
+    print_success "Backend development environment setup completed."
+    cd ..
+}
+
+# Function to start backend in development mode
+start_backend_dev() {
+    print_status "Starting backend in development mode..."
+    
+    cd backend
+    source venv/bin/activate
+    
+    # Initialize database with seed data
+    print_status "Initializing database with seed data..."
+    python scripts/init_database.py
+    
+    # Start the backend server
+    print_status "Starting FastAPI server..."
+    uvicorn main:app --reload --host 0.0.0.0 --port 8000 &
+    BACKEND_PID=$!
+    
+    print_success "Backend server started on http://localhost:8000"
+    print_status "API Documentation available at http://localhost:8000/docs"
+    
+    cd ..
+    return $BACKEND_PID
+}
+
+# Function to setup frontend development environment
+setup_frontend_dev() {
+    print_status "Setting up frontend development environment..."
+    
+    cd frontend
+    
+    # Check if Node.js is installed
+    if ! command_exists node; then
+        print_error "Node.js is not installed. Please install Node.js 18 or higher."
+        exit 1
+    fi
+    
+    # Install dependencies
+    print_status "Installing Node.js dependencies..."
+    npm install
+    
+    print_success "Frontend development environment setup completed."
+    cd ..
+}
+
+# Function to start frontend in development mode
+start_frontend_dev() {
+    print_status "Starting frontend in development mode..."
+    
+    cd frontend
+    npm run dev &
+    FRONTEND_PID=$!
+    
+    print_success "Frontend server started on http://localhost:3000"
+    
+    cd ..
+    return $FRONTEND_PID
+}
+
+# Function to start development mode
+start_dev_mode() {
+    print_status "Starting CityCare in development mode..."
+    
+    # Setup environments
+    setup_backend_dev
+    setup_frontend_dev
+    
+    # Start services
+    start_backend_dev
+    BACKEND_PID=$!
+    
+    start_frontend_dev  
+    FRONTEND_PID=$!
+    
+    echo ""
+    print_success "CityCare Development Environment is running!"
+    echo ""
+    echo "🌐 Frontend: http://localhost:3000"
+    echo "🔧 Backend API: http://localhost:8000"
+    echo "📊 API Documentation: http://localhost:8000/docs"
+    echo "🤖 Rights Agent: http://localhost:3000/watsonxbot"
+    echo ""
+    echo "Default Admin Credentials:"
+    echo "  Email: admin@admin.com"
+    echo "  Password: admin"
+    echo ""
+    print_status "Press Ctrl+C to stop all services"
+    
+    # Wait for interrupt
+    trap 'kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; exit' INT
+    wait
 }
 
 # Main execution
 main() {
     echo "=================================================="
     echo "🏙️  CityCare Application Setup"
-    echo "   Smart City Complaint Management System"
     echo "=================================================="
     echo ""
     
@@ -297,72 +426,72 @@ main() {
     
     # Check if help is requested
     if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
-        echo "CityCare Setup Script - Local development setup"
-        echo ""
         echo "Usage: $0 [OPTIONS]"
         echo ""
         echo "Options:"
-        echo "  --help, -h          Show this help message"
-        echo "  --stop              Stop all services"
-        echo "  --restart           Restart all services"
-        echo "  --logs [service]    Show service logs (backend/frontend/both)"
-        echo "  --status            Show service status"
-        echo "  --clean             Clean up log files and stop services"
-        echo ""
-        echo "Requirements:"
-        echo "  - Node.js 18+ and npm"
-        echo "  - Python 3.8+ and pip3"
-        echo ""
-        echo "First time setup:"
-        echo "  1. chmod +x setup.sh"
-        echo "  2. ./setup.sh"
-        echo ""
-        echo "Access points after setup:"
-        echo "  🌐 Frontend: http://localhost:3000"
-        echo "  🔧 Backend API: http://localhost:8000"
+        echo "  --help, -h     Show this help message"
+        echo "  --dev          Start in development mode (recommended for development)"
+        echo "  --setup-dev    Setup development environment only"
+        echo "  --stop         Stop all services"
+        echo "  --restart      Restart all services"
+        echo "  --logs         Show service logs"
+        echo "  --status       Show service status"
+        echo "  --clean        Clean up all containers and volumes"
         echo ""
         exit 0
     fi
     
     # Handle different commands
     case "$1" in
+        --dev)
+            start_dev_mode
+            exit 0
+            ;;
+        --setup-dev)
+            setup_backend_dev
+            setup_frontend_dev
+            print_success "Development environment setup completed."
+            echo ""
+            echo "To start development servers:"
+            echo "  Backend: cd backend && source venv/bin/activate && uvicorn main:app --reload"
+            echo "  Frontend: cd frontend && npm run dev"
+            echo ""
+            echo "Or run: ./setup.sh --dev"
+            exit 0
+            ;;
         --stop)
-            stop_services
+            print_status "Stopping CityCare services..."
+            docker-compose down
+            print_success "Services stopped successfully."
             exit 0
             ;;
         --restart)
             print_status "Restarting CityCare services..."
-            stop_services
-            sleep 2
-            start_backend
-            start_frontend
+            docker-compose down
+            docker-compose up -d
             show_status
             exit 0
             ;;
         --logs)
-            show_logs "$@"
+            docker-compose logs -f
             exit 0
             ;;
         --status)
-            if [ -f backend.pid ] && [ -f frontend.pid ]; then
-                BACKEND_PID=$(cat backend.pid)
-                FRONTEND_PID=$(cat frontend.pid)
-                if kill -0 $BACKEND_PID 2>/dev/null && kill -0 $FRONTEND_PID 2>/dev/null; then
-                    show_status
-                else
-                    print_warning "Some services may not be running properly."
-                fi
-            else
-                print_warning "Services don't appear to be running."
-            fi
+            show_status
             exit 0
             ;;
         --clean)
-            print_status "Cleaning up..."
-            stop_services
-            rm -f backend.log frontend.log
-            rm -f backend/citycare.db
-            print_success "Cleanup completed."
+            print_warning "This will remove all containers, networks, and volumes."
+            read -p "Are you sure? (y/N): " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                print_status "Cleaning up..."
+                docker-compose down -v --remove-orphans
+                docker system prune -f
+                print_success "Cleanup completed."
+            else
+                print_status "Cleanup cancelled."
+            fi
             exit 0
             ;;
     esac
@@ -370,9 +499,10 @@ main() {
     # Run setup steps
     check_requirements
     create_env_file
-    install_dependencies
-    start_backend
-    start_frontend
+    create_directories
+    create_nginx_config
+    create_db_init
+    start_services
     show_status
     
     # Remove trap

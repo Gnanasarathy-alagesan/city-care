@@ -362,6 +362,7 @@ async def get_user_complaints_list(
     status: Optional[str] = None,
     priority: Optional[str] = None,
     service: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -378,7 +379,7 @@ async def get_user_complaints_list(
     Returns:
         dict: Paginated list of complaints with total count
     """
-    query = db.query(Complaint)
+    query = db.query(Complaint).filter(Complaint.reporter_id == current_user.id)
 
     if search:
         query = query.filter(Complaint.title.contains(search))

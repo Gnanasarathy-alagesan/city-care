@@ -7,33 +7,33 @@ import Image from 'next/image'
 export default function AboutPage() {
   const teamMembers = [
     {
-      name: "Dr. Sarah Johnson",
+      name: "GnanaSarathy Alagesan",
       role: "Project Director",
-      email: "sarah.johnson@citycare.gov",
+      email: "gnanasarathy@citycare.gov",
       phone: "+1 (555) 101-2001",
       image: "/diverse-user-avatars.png",
       bio: "Leading digital transformation in public services with 15+ years of experience in municipal technology."
     },
     {
-      name: "Michael Chen",
+      name: "Chelagamsetty Ishitha",
       role: "Lead Developer",
-      email: "michael.chen@citycare.gov", 
+      email: "ishitha@citycare.gov", 
       phone: "+1 (555) 101-2002",
       image: "/diverse-user-avatars.png",
       bio: "Full-stack developer specializing in civic technology and AI-powered solutions for government services."
     },
     {
-      name: "Emily Rodriguez",
+      name: "Hariboobaalan Palanisamy",
       role: "UX/UI Designer",
-      email: "emily.rodriguez@citycare.gov",
+      email: "hariboobaalan@citycare.gov",
       phone: "+1 (555) 101-2003", 
       image: "/diverse-user-avatars.png",
       bio: "Designing accessible and user-friendly interfaces for public services with focus on citizen experience."
     },
     {
-      name: "David Thompson",
+      name: "Mukesh Ravi",
       role: "Data Analyst",
-      email: "david.thompson@citycare.gov",
+      email: "mukesh@citycare.gov",
       phone: "+1 (555) 101-2004",
       image: "/diverse-user-avatars.png",
       bio: "Leveraging data analytics and IBM AI to optimize city operations and improve service delivery."
