@@ -1,278 +1,369 @@
 # CityCare Backend API Endpoints
 
-## Authentication Endpoints
+## Base URL
+http://localhost:8000
+
+## Health Check
+GET /api
+- Description: Root endpoint to check API status
+- Response: { "message": "API is running" }
+
+GET /api/health
+- Description: Health check endpoint for monitoring
+- Response: { "status": "healthy", "timestamp": "ISO_DATE" }
+
+## Authentication Endpoints (/api/auth)
 POST /api/auth/login
-- Body: { email: string, password: string }
-- Response: { token: string, user: UserObject, isAdmin: boolean }
+- Description: Authenticate user login and return access token
+- Body: { "email": string, "password": string }
+- Response: { "token": string, "user": UserObject, "isAdmin": boolean }
 
 POST /api/auth/register
-- Body: { firstName: string, lastName: string, email: string, password: string }
-- Response: { token: string, user: UserObject }
-
-POST /api/auth/logout
-- Headers: Authorization: Bearer <token>
-- Response: { message: string }
+- Description: Register a new user account in the system
+- Body: { "firstName": string, "lastName": string, "email": string, "password": string }
+- Response: { "token": string, "user": UserObject, "isAdmin": boolean }
 
 GET /api/auth/me
+- Description: Get information about the currently authenticated user
 - Headers: Authorization: Bearer <token>
-- Response: { user: UserObject, isAdmin: boolean }
+- Response: { "user": UserObject, "isAdmin": boolean }
 
-## User Management Endpoints
-GET /api/users
-- Headers: Authorization: Bearer <admin_token>
-- Query: ?page=1&limit=10&search=&status=&district=
-- Response: { users: UserObject[], total: number, page: number }
-
-GET /api/users/:id
+POST /api/auth/logout
+- Description: Logout the current user (client-side token removal)
 - Headers: Authorization: Bearer <token>
-- Response: { user: UserObject }
+- Response: { "message": "Successfully logged out" }
 
-PUT /api/users/:id
-- Headers: Authorization: Bearer <token>
-- Body: { firstName?: string, lastName?: string, phone?: string, address?: string }
-- Response: { user: UserObject }
-
-DELETE /api/users/:id
-- Headers: Authorization: Bearer <admin_token>
-- Response: { message: string }
-
-## Complaint Management Endpoints
-GET /api/complaints
-- Headers: Authorization: Bearer <token>
-- Query: ?page=1&limit=10&search=&status=&priority=&service=&userId=
-- Response: { complaints: ComplaintObject[], total: number, page: number }
-
-GET /api/complaints/:id
-- Headers: Authorization: Bearer <token>
-- Response: { complaint: ComplaintObject }
-
-POST /api/complaints
-- Headers: Authorization: Bearer <token>
-- Body: { title: string, description: string, serviceType: string, location?: LocationObject, images?: File[] }
-- Response: { complaint: ComplaintObject }
-
-PUT /api/complaints/:id
-- Headers: Authorization: Bearer <token>
-- Body: { title?: string, description?: string, status?: string, priority?: string }
-- Response: { complaint: ComplaintObject }
-
-DELETE /api/complaints/:id
-- Headers: Authorization: Bearer <token>
-- Response: { message: string }
-
-## Admin Complaint Management
-PUT /api/admin/complaints/:id/assign
-- Headers: Authorization: Bearer <admin_token>
-- Body: { teamId: string, assignedTo: string }
-- Response: { complaint: ComplaintObject }
-
-PUT /api/admin/complaints/:id/status
-- Headers: Authorization: Bearer <admin_token>
-- Body: { status: string, note?: string }
-- Response: { complaint: ComplaintObject }
-
-PUT /api/admin/complaints/:id/priority
-- Headers: Authorization: Bearer <admin_token>
-- Body: { priority: string, reason?: string }
-- Response: { complaint: ComplaintObject }
-
-## Service Categories
+## User Operations (/api)
 GET /api/services
-- Response: { services: ServiceObject[] }
+- Description: Retrieve all available city services for complaint submission
+- Response: { "services": ServiceObject[] }
 
-GET /api/services/:id
-- Response: { service: ServiceObject }
-
-## File Upload
 POST /api/upload
+- Description: Upload files for complaint attachments
 - Headers: Authorization: Bearer <token>
 - Body: FormData with files
-- Response: { urls: string[] }
+- Response: { "urls": string[] }
 
-## Dashboard Statistics
+PUT /api/user
+- Description: Update current user's profile information
+- Headers: Authorization: Bearer <token>
+- Body: { "phone"?: string, "address"?: string, "district"?: string }
+- Response: UserObject
+
 GET /api/dashboard/stats
+- Description: Get dashboard statistics for the current user
 - Headers: Authorization: Bearer <token>
-- Response: { totalComplaints: number, inProgress: number, resolved: number }
+- Response: { "totalComplaints": number, "inProgress": number, "resolved": number }
 
-GET /api/admin/dashboard/stats
-- Headers: Authorization: Bearer <admin_token>
-- Response: { 
-    totalComplaints: number, 
-    inProgress: number, 
-    resolvedToday: number, 
-    highPriority: number,
-    trends: TrendObject[]
-  }
-
-## AI Integration Endpoints
-POST /api/ai/suggest-category
+POST /api/complaints
+- Description: Submit a new complaint to the city services
 - Headers: Authorization: Bearer <token>
-- Body: { description: string }
-- Response: { suggestions: string[], confidence: number }
+- Body: FormData with title, description, serviceType, location?, images[]
+- Response: { "complaint": ComplaintObject }
 
-POST /api/ai/analyze-complaint
-- Headers: Authorization: Bearer <admin_token>
-- Body: { complaintId: string }
-- Response: { 
-    priority: string, 
-    reasoning: string, 
-    estimatedCost: string, 
-    recommendedAction: string,
-    confidence: number 
-  }
+GET /api/complaints
+- Description: Get paginated list of complaints with optional filtering
+- Headers: Authorization: Bearer <token>
+- Query: ?page=1&limit=10&search=&status=&priority=&service=
+- Response: { "complaints": ComplaintObject[], "total": number, "page": number }
 
-GET /api/ai/insights
-- Headers: Authorization: Bearer <admin_token>
-- Response: { 
-    suggestions: AIInsightObject[],
-    trends: TrendObject[],
-    resourceAllocation: ResourceObject[]
-  }
+GET /api/complaints/{complaint_id}
+- Description: Get detailed information about a specific complaint
+- Headers: Authorization: Bearer <token>
+- Response: { "complaint": DetailedComplaintObject }
 
-## Geolocation
 POST /api/geocode
+- Description: Convert latitude and longitude coordinates to human-readable address
 - Headers: Authorization: Bearer <token>
-- Body: { lat: number, lng: number }
-- Response: { address: string, district: string }
+- Body: { "lat": number, "lng": number }
+- Response: { "address": string, "district": string }
 
-GET /api/complaints/map
-- Headers: Authorization: Bearer <admin_token>
-- Query: ?bounds=lat1,lng1,lat2,lng2&status=&priority=
-- Response: { complaints: ComplaintMapObject[] }
-
-## Notifications
-GET /api/notifications
+POST /api/ai/suggest-category
+- Description: Get AI-powered suggestions for complaint categorization
 - Headers: Authorization: Bearer <token>
-- Response: { notifications: NotificationObject[] }
+- Body: { "description": string }
+- Response: { "suggestions": string[], "confidence": number }
 
-POST /api/notifications/mark-read
+## Admin Operations (/api/admin)
+GET /api/admin/dashboard/stats
+- Description: Get comprehensive dashboard statistics for admin overview
+- Headers: Authorization: Bearer <admin_token>
+- Response: { "totalComplaints": number, "totalComplaintsChange": number, "inProgress": number, "resolved": number, "highPriority": number, "totalResources": number, "availableResources": number, "busyResources": number }
+
+GET /api/admin/complaints
+- Description: Get paginated list of all complaints with detailed information
+- Headers: Authorization: Bearer <admin_token>
+- Query: ?page=1&limit=10&search=&status=&priority=&service=
+- Response: { "complaints": DetailedComplaintObject[], "total": number, "page": number }
+
+POST /api/admin/complaint
+- Description: Create a complaint on behalf of a citizen (admin function)
+- Headers: Authorization: Bearer <admin_token>
+- Body: FormData with title, description, service_type, location?, images[], user_email
+- Response: { "complaint": ComplaintObject }
+
+GET /api/admin/users
+- Description: Get paginated list of all registered users (excluding admins)
+- Headers: Authorization: Bearer <admin_token>
+- Query: ?page=1&limit=10&search=&status=&district=
+- Response: { "users": UserObject[], "total": number, "page": number }
+
+GET /api/admin/resources
+- Description: Get paginated list of all system resources with filtering options
+- Headers: Authorization: Bearer <admin_token>
+- Query: ?page=1&limit=20&search=&type_filter=&service_category=&availability_status=
+- Response: { "resources": ResourceObject[], "total": number, "page": number }
+
+POST /api/admin/resources
+- Description: Create a new system resource for complaint resolution
+- Headers: Authorization: Bearer <admin_token>
+- Body: ResourceCreateObject
+- Response: { "message": string, "resource": ResourceObject }
+
+PUT /api/admin/resources/{resource_id}
+- Description: Update an existing system resource
+- Headers: Authorization: Bearer <admin_token>
+- Body: ResourceUpdateObject
+- Response: { "message": string, "resource": ResourceObject }
+
+DELETE /api/admin/resources/{resource_id}
+- Description: Deactivate a system resource (soft delete)
+- Headers: Authorization: Bearer <admin_token>
+- Response: { "message": string }
+
+GET /api/admin/complaints/{complaint_id}/resources
+- Description: Get all resources assigned to a specific complaint
+- Headers: Authorization: Bearer <admin_token>
+- Response: { "complaint": ComplaintObject, "assignments": ResourceAssignmentObject[] }
+
+POST /api/admin/complaints/{complaint_id}/resources
+- Description: Assign resources to a complaint for resolution
+- Headers: Authorization: Bearer <admin_token>
+- Body: { "resource_ids": string[], "notes"?: string, "estimated_hours"?: number }
+- Response: { "message": string, "assignedResources": ResourceObject[] }
+
+DELETE /api/admin/complaints/{complaint_id}/resources/{resource_id}
+- Description: Remove a resource assignment from a complaint
+- Headers: Authorization: Bearer <admin_token>
+- Response: { "message": string }
+
+## Bot & AI Operations (/api)
+POST /api/bot/chat
+- Description: Chat with the AI-powered Citizen Rights & Schemes Assistant
 - Headers: Authorization: Bearer <token>
-- Body: { notificationIds: string[] }
-- Response: { message: string }
+- Body: { "message": string, "history"?: MessageObject[] }
+- Response: { "message": string, "confidence": number, "intent": string, "entities": EntityObject[], "suggestedActions": string[], "sources": string[] }
 
-## Teams Management (Admin)
-GET /api/admin/teams
+GET /api/admin/bot/config
+- Description: Get current bot configuration settings
 - Headers: Authorization: Bearer <admin_token>
-- Response: { teams: TeamObject[] }
+- Response: BotConfigObject
 
-POST /api/admin/teams
+PUT /api/admin/bot/config
+- Description: Update bot configuration settings
 - Headers: Authorization: Bearer <admin_token>
-- Body: { name: string, specialization: string, members: string[] }
-- Response: { team: TeamObject }
+- Body: BotConfigObject
+- Response: { "message": string }
 
-PUT /api/admin/teams/:id
+GET /api/admin/bot/analytics
+- Description: Get bot usage analytics and performance metrics
 - Headers: Authorization: Bearer <admin_token>
-- Body: { name?: string, specialization?: string, members?: string[] }
-- Response: { team: TeamObject }
+- Response: { "totalSessions": number, "activeSessions": number, "avgSessionDuration": string, "topIntents": IntentObject[], "satisfactionScore": number, "resolutionRate": number }
+
+GET /api/admin/analytics/watsonx
+- Description: Get comprehensive WatsonX-powered analytics and insights
+- Headers: Authorization: Bearer <admin_token>
+- Response: { "overview": OverviewObject, "insights": InsightObject[], "trends": TrendObject[], "recommendations": string[] }
+
+POST /api/admin/analytics/watsonx/generate
+- Description: Generate new insights using fresh WatsonX analysis
+- Headers: Authorization: Bearer <admin_token>
+- Response: { "message": string, "insights": InsightObject[] }
+
+POST /api/admin/analytics/watsonx/analyze
+- Description: Send current system data to WatsonX for comprehensive analysis
+- Headers: Authorization: Bearer <admin_token>
+- Body: { "includeComplaints": boolean, "includeResources": boolean, "includeUsers": boolean, "timeframe": string }
+- Response: { "status": string, "insights_generated": number, "confidence_score": number, "processing_time": string, "data_points_analyzed": number, "recommendations": string[] }
+
+GET /api/admin/analytics/watsonx/insights/{insight_id}
+- Description: Get detailed information about a specific WatsonX insight
+- Headers: Authorization: Bearer <admin_token>
+- Response: DetailedInsightObject
 
 ## Data Models
 
 UserObject:
 {
-  id: string,
-  firstName: string,
-  lastName: string,
-  email: string,
-  phone?: string,
-  address?: string,
-  district?: string,
-  joinDate: string,
-  status: 'Active' | 'Inactive',
-  complaintsCount: number,
-  lastActive: string
-}
-
-ComplaintObject:
-{
-  id: string,
-  title: string,
-  description: string,
-  serviceType: string,
-  status: 'Open' | 'In Progress' | 'Resolved',
-  priority: 'Low' | 'Medium' | 'High',
-  location?: LocationObject,
-  images: string[],
-  reporterId: string,
-  assignedTo?: string,
-  teamId?: string,
-  createdAt: string,
-  updatedAt: string,
-  statusHistory: StatusHistoryObject[],
-  aiAnalysis?: AIAnalysisObject
-}
-
-LocationObject:
-{
-  lat: number,
-  lng: number,
-  address: string,
-  district: string
+  "id": string,
+  "firstName": string,
+  "lastName": string,
+  "email": string,
+  "phone"?: string,
+  "address"?: string,
+  "district"?: string,
+  "isAdmin": boolean,
+  "joinDate"?: string,
+  "status"?: string,
+  "complaintsCount"?: number,
+  "lastActive"?: string,
+  "avatar"?: string
 }
 
 ServiceObject:
 {
-  id: string,
-  name: string,
-  description: string,
-  icon: string,
-  examples: string[]
+  "id": string,
+  "name": string,
+  "description": string,
+  "icon": string,
+  "examples": string[]
+}
+
+ComplaintObject:
+{
+  "id": string,
+  "title": string,
+  "description": string,
+  "service": string,
+  "status": "Open" | "In Progress" | "Resolved",
+  "priority": "Low" | "Medium" | "High",
+  "date": string,
+  "location"?: {
+    "address": string,
+    "lat": number,
+    "lng": number
+  },
+  "reporter"?: {
+    "name": string,
+    "email": string
+  },
+  "images"?: string[],
+  "assignedTo"?: string,
+  "estimatedResolution"?: string
+}
+
+DetailedComplaintObject extends ComplaintObject:
+{
+  "aiSuggestion"?: {
+    "priority": string,
+    "reasoning": string,
+    "estimatedCost": string,
+    "recommendedAction": string
+  },
+  "statusHistory": StatusHistoryObject[],
+  "resources"?: ResourceObject[]
+}
+
+ResourceObject:
+{
+  "id": string,
+  "name": string,
+  "type": "Personnel" | "Equipment" | "Vehicle",
+  "serviceCategory": string,
+  "description"?: string,
+  "availabilityStatus": "Available" | "Busy" | "Maintenance",
+  "contactPerson": string,
+  "contactPhone": string,
+  "contactEmail": string,
+  "location": string,
+  "capacity": number,
+  "hourlyRate"?: number,
+  "activeAssignments"?: number,
+  "createdAt": string,
+  "updatedAt": string
+}
+
+ResourceAssignmentObject:
+{
+  "id": string,
+  "resource": ResourceObject,
+  "assignedBy": string,
+  "assignedAt": string,
+  "status": "Assigned" | "In Progress" | "Completed" | "Cancelled",
+  "startTime"?: string,
+  "endTime"?: string,
+  "estimatedHours"?: number,
+  "actualHours"?: number,
+  "notes"?: string
 }
 
 StatusHistoryObject:
 {
-  status: string,
-  date: string,
-  note: string,
-  updatedBy: string
+  "status": string,
+  "date": string,
+  "note": string,
+  "updated_by"?: string
 }
 
-AIAnalysisObject:
+BotConfigObject:
 {
-  priority: string,
-  reasoning: string,
-  estimatedCost: string,
-  recommendedAction: string,
-  confidence: number
+  "isEnabled": boolean,
+  "maxSessionDuration": number,
+  "confidenceThreshold": number,
+  "fallbackMessage": string,
+  "adminNotifications": boolean,
+  "autoEscalation": boolean
 }
 
-TeamObject:
+InsightObject:
 {
-  id: string,
-  name: string,
-  specialization: string,
-  members: string[],
-  activeComplaints: number,
-  completedComplaints: number
+  "id": string,
+  "type": "prediction" | "optimization" | "alert",
+  "title": string,
+  "description": string,
+  "confidence": number,
+  "impact": "low" | "medium" | "high",
+  "actionable": boolean,
+  "data": object
 }
 
-NotificationObject:
+## Database Information
+- Database Type: SQLite
+- Database File: backend/citycare.db
+- ORM: SQLAlchemy
+- Migration Tool: Alembic (if configured)
+
+## Environment Variables Required
+- SECRET_KEY: JWT secret key for token generation
+- ACCESS_TOKEN_EXPIRE_MINUTES: Token expiration time (default: 30)
+- DATABASE_URL: SQLite database URL (default: sqlite:///./citycare.db)
+- WATSONX_API_KEY: WatsonX AI service API key (optional)
+- NEXT_PUBLIC_API_BASE_URL: Frontend API base URL (default: http://localhost:8000)
+
+## Authentication
+- Type: JWT Bearer Token
+- Header: Authorization: Bearer <token>
+- Admin Access: Requires is_admin=true in user record
+- Token Expiration: Configurable (default 30 minutes)
+
+## File Upload
+- Upload Directory: backend/uploads/
+- Supported Formats: Images (jpg, png, gif), Documents (pdf, doc)
+- File Naming: UUID-based unique filenames
+- Access: Static file serving from /uploads/ path
+
+## Error Responses
+Standard error format:
 {
-  id: string,
-  userId: string,
-  title: string,
-  message: string,
-  type: 'complaint_update' | 'system' | 'assignment',
-  read: boolean,
-  createdAt: string
+  "detail": "Error message description"
 }
 
-## Environment Variables Needed
-- JWT_SECRET: Secret key for JWT token generation
-- DATABASE_URL: Database connection string
-- UPLOAD_PATH: Path for file uploads
-- IBM_AI_API_KEY: IBM Watson API key for AI features
-- GEOCODING_API_KEY: Google Maps or similar geocoding service API key
-- EMAIL_SERVICE_API_KEY: For email notifications (optional)
-- ADMIN_EMAIL: Default admin email
-- ADMIN_PASSWORD: Default admin password hash
+Common HTTP Status Codes:
+- 200: Success
+- 400: Bad Request (validation errors)
+- 401: Unauthorized (invalid/missing token)
+- 403: Forbidden (insufficient permissions)
+- 404: Not Found
+- 422: Unprocessable Entity (validation errors)
+- 500: Internal Server Error
 
-## Database Tables Needed
-- users
-- complaints
-- services
-- teams
-- complaint_status_history
-- notifications
-- complaint_images
-- ai_analyses
-- user_sessions
+## Rate Limiting
+- Login endpoint: 5 requests per minute per IP
+- File upload: 10 files per request maximum
+- Chat endpoint: 30 requests per minute per user
+
+## Development Setup
+1. Backend: cd backend && source venv/bin/activate && uvicorn main:app --reload
+2. Frontend: cd frontend && npm run dev
+3. Database: Automatically initialized with seed data on startup
+4. Admin Login: admin@admin.com / admin
