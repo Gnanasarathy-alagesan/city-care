@@ -1,0 +1,29 @@
+repos:
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        name: Sort Python imports
+        types: [python]
+
+  - repo: https://github.com/psf/black
+    rev: 24.4.2
+    hooks:
+      - id: black
+        language_version: python3
+
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.0.0  # ✅ existing tag
+    hooks:
+      - id: prettier
+        name: Prettier organize imports
+        additional_dependencies:
+          - prettier
+          - prettier-plugin-organize-imports
+        files: \.(js|jsx|ts|tsx)$
+        
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.3
+    hooks:
+      - id: ruff
+        args: [--fix, --select, F401]  # F401 = unused imports

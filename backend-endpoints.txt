@@ -1,0 +1,278 @@
+# CityCare Backend API Endpoints
+
+## Authentication Endpoints
+POST /api/auth/login
+- Body: { email: string, password: string }
+- Response: { token: string, user: UserObject, isAdmin: boolean }
+
+POST /api/auth/register
+- Body: { firstName: string, lastName: string, email: string, password: string }
+- Response: { token: string, user: UserObject }
+
+POST /api/auth/logout
+- Headers: Authorization: Bearer <token>
+- Response: { message: string }
+
+GET /api/auth/me
+- Headers: Authorization: Bearer <token>
+- Response: { user: UserObject, isAdmin: boolean }
+
+## User Management Endpoints
+GET /api/users
+- Headers: Authorization: Bearer <admin_token>
+- Query: ?page=1&limit=10&search=&status=&district=
+- Response: { users: UserObject[], total: number, page: number }
+
+GET /api/users/:id
+- Headers: Authorization: Bearer <token>
+- Response: { user: UserObject }
+
+PUT /api/users/:id
+- Headers: Authorization: Bearer <token>
+- Body: { firstName?: string, lastName?: string, phone?: string, address?: string }
+- Response: { user: UserObject }
+
+DELETE /api/users/:id
+- Headers: Authorization: Bearer <admin_token>
+- Response: { message: string }
+
+## Complaint Management Endpoints
+GET /api/complaints
+- Headers: Authorization: Bearer <token>
+- Query: ?page=1&limit=10&search=&status=&priority=&service=&userId=
+- Response: { complaints: ComplaintObject[], total: number, page: number }
+
+GET /api/complaints/:id
+- Headers: Authorization: Bearer <token>
+- Response: { complaint: ComplaintObject }
+
+POST /api/complaints
+- Headers: Authorization: Bearer <token>
+- Body: { title: string, description: string, serviceType: string, location?: LocationObject, images?: File[] }
+- Response: { complaint: ComplaintObject }
+
+PUT /api/complaints/:id
+- Headers: Authorization: Bearer <token>
+- Body: { title?: string, description?: string, status?: string, priority?: string }
+- Response: { complaint: ComplaintObject }
+
+DELETE /api/complaints/:id
+- Headers: Authorization: Bearer <token>
+- Response: { message: string }
+
+## Admin Complaint Management
+PUT /api/admin/complaints/:id/assign
+- Headers: Authorization: Bearer <admin_token>
+- Body: { teamId: string, assignedTo: string }
+- Response: { complaint: ComplaintObject }
+
+PUT /api/admin/complaints/:id/status
+- Headers: Authorization: Bearer <admin_token>
+- Body: { status: string, note?: string }
+- Response: { complaint: ComplaintObject }
+
+PUT /api/admin/complaints/:id/priority
+- Headers: Authorization: Bearer <admin_token>
+- Body: { priority: string, reason?: string }
+- Response: { complaint: ComplaintObject }
+
+## Service Categories
+GET /api/services
+- Response: { services: ServiceObject[] }
+
+GET /api/services/:id
+- Response: { service: ServiceObject }
+
+## File Upload
+POST /api/upload
+- Headers: Authorization: Bearer <token>
+- Body: FormData with files
+- Response: { urls: string[] }
+
+## Dashboard Statistics
+GET /api/dashboard/stats
+- Headers: Authorization: Bearer <token>
+- Response: { totalComplaints: number, inProgress: number, resolved: number }
+
+GET /api/admin/dashboard/stats
+- Headers: Authorization: Bearer <admin_token>
+- Response: { 
+    totalComplaints: number, 
+    inProgress: number, 
+    resolvedToday: number, 
+    highPriority: number,
+    trends: TrendObject[]
+  }
+
+## AI Integration Endpoints
+POST /api/ai/suggest-category
+- Headers: Authorization: Bearer <token>
+- Body: { description: string }
+- Response: { suggestions: string[], confidence: number }
+
+POST /api/ai/analyze-complaint
+- Headers: Authorization: Bearer <admin_token>
+- Body: { complaintId: string }
+- Response: { 
+    priority: string, 
+    reasoning: string, 
+    estimatedCost: string, 
+    recommendedAction: string,
+    confidence: number 
+  }
+
+GET /api/ai/insights
+- Headers: Authorization: Bearer <admin_token>
+- Response: { 
+    suggestions: AIInsightObject[],
+    trends: TrendObject[],
+    resourceAllocation: ResourceObject[]
+  }
+
+## Geolocation
+POST /api/geocode
+- Headers: Authorization: Bearer <token>
+- Body: { lat: number, lng: number }
+- Response: { address: string, district: string }
+
+GET /api/complaints/map
+- Headers: Authorization: Bearer <admin_token>
+- Query: ?bounds=lat1,lng1,lat2,lng2&status=&priority=
+- Response: { complaints: ComplaintMapObject[] }
+
+## Notifications
+GET /api/notifications
+- Headers: Authorization: Bearer <token>
+- Response: { notifications: NotificationObject[] }
+
+POST /api/notifications/mark-read
+- Headers: Authorization: Bearer <token>
+- Body: { notificationIds: string[] }
+- Response: { message: string }
+
+## Teams Management (Admin)
+GET /api/admin/teams
+- Headers: Authorization: Bearer <admin_token>
+- Response: { teams: TeamObject[] }
+
+POST /api/admin/teams
+- Headers: Authorization: Bearer <admin_token>
+- Body: { name: string, specialization: string, members: string[] }
+- Response: { team: TeamObject }
+
+PUT /api/admin/teams/:id
+- Headers: Authorization: Bearer <admin_token>
+- Body: { name?: string, specialization?: string, members?: string[] }
+- Response: { team: TeamObject }
+
+## Data Models
+
+UserObject:
+{
+  id: string,
+  firstName: string,
+  lastName: string,
+  email: string,
+  phone?: string,
+  address?: string,
+  district?: string,
+  joinDate: string,
+  status: 'Active' | 'Inactive',
+  complaintsCount: number,
+  lastActive: string
+}
+
+ComplaintObject:
+{
+  id: string,
+  title: string,
+  description: string,
+  serviceType: string,
+  status: 'Open' | 'In Progress' | 'Resolved',
+  priority: 'Low' | 'Medium' | 'High',
+  location?: LocationObject,
+  images: string[],
+  reporterId: string,
+  assignedTo?: string,
+  teamId?: string,
+  createdAt: string,
+  updatedAt: string,
+  statusHistory: StatusHistoryObject[],
+  aiAnalysis?: AIAnalysisObject
+}
+
+LocationObject:
+{
+  lat: number,
+  lng: number,
+  address: string,
+  district: string
+}
+
+ServiceObject:
+{
+  id: string,
+  name: string,
+  description: string,
+  icon: string,
+  examples: string[]
+}
+
+StatusHistoryObject:
+{
+  status: string,
+  date: string,
+  note: string,
+  updatedBy: string
+}
+
+AIAnalysisObject:
+{
+  priority: string,
+  reasoning: string,
+  estimatedCost: string,
+  recommendedAction: string,
+  confidence: number
+}
+
+TeamObject:
+{
+  id: string,
+  name: string,
+  specialization: string,
+  members: string[],
+  activeComplaints: number,
+  completedComplaints: number
+}
+
+NotificationObject:
+{
+  id: string,
+  userId: string,
+  title: string,
+  message: string,
+  type: 'complaint_update' | 'system' | 'assignment',
+  read: boolean,
+  createdAt: string
+}
+
+## Environment Variables Needed
+- JWT_SECRET: Secret key for JWT token generation
+- DATABASE_URL: Database connection string
+- UPLOAD_PATH: Path for file uploads
+- IBM_AI_API_KEY: IBM Watson API key for AI features
+- GEOCODING_API_KEY: Google Maps or similar geocoding service API key
+- EMAIL_SERVICE_API_KEY: For email notifications (optional)
+- ADMIN_EMAIL: Default admin email
+- ADMIN_PASSWORD: Default admin password hash
+
+## Database Tables Needed
+- users
+- complaints
+- services
+- teams
+- complaint_status_history
+- notifications
+- complaint_images
+- ai_analyses
+- user_sessions
