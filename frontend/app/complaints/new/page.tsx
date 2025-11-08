@@ -1,4 +1,4 @@
-'use client'
+'use client';
 
 import { useState, useRef } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
@@ -27,7 +27,6 @@ export default function NewComplaintPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
   const router = useRouter()
-  const searchParams = useSearchParams()
 
   const services = [
     { value: 'roads', label: 'Roads & Infrastructure' },
