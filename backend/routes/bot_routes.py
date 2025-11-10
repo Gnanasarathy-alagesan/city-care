@@ -97,6 +97,7 @@ async def get_watsonx_system_analytics(
     admin_access=Depends(get_admin_access), db: Session = Depends(get_db)
 ):
     """
+    Get comprehensive analytics with automatic fallback to static data if Watson X unavailable
     Get comprehensive WatsonX-powered analytics and insights for system performance.
 
     Returns:
@@ -105,6 +106,7 @@ async def get_watsonx_system_analytics(
             - insights: AI-generated insights about system performance
             - trends: Identified trends in complaint patterns
             - recommendations: AI recommendations for system improvement
+            - note: Indicates if using live Watson X or fallback data
     """
 
     total_complaints = [obj.to_dict() for obj in db.query(Complaint).all()]
@@ -120,12 +122,18 @@ async def get_watsonx_system_analytics(
             .all()
         )
     ]
-    # # Get WatsonX analysis
+
     watsonx_analysis = watsonx_service.get_analytical_insights(
         complaints_data=total_complaints,
         resources_data=total_resources,
         busy_resources_data=busy_resources,
     )
+
+    if watsonx_service.is_watson_x_available:
+        watsonx_analysis["dataSource"] = "live_watsonx"
+    else:
+        watsonx_analysis["dataSource"] = "fallback_static"
+        logger.info("Returning analytics from fallback data - Watson X not configured")
 
     return watsonx_analysis
 
@@ -315,6 +323,7 @@ async def chat_with_citizen_rights_agent(
     message_data: BotMessage, current_user: User = Depends(get_current_user)
 ):
     """
+    Added fallback handling for when external AI service is unavailable
     Chat with the AI-powered Citizen Rights & Schemes Assistant.
 
     This endpoint connects to an actual AI agent that provides information about:
@@ -338,11 +347,22 @@ async def chat_with_citizen_rights_agent(
             - entities: Extracted entities (scheme names, rights categories)
             - suggestedActions: Suggested follow-up actions
             - sources: Relevant sources or references
+            - source: Indicates if response is from live service or fallback
     """
     if not BOT_CONFIG["isEnabled"]:
         raise HTTPException(
             status_code=503, detail="Rights Agent service is currently disabled"
         )
+
+    if not WATSONX_APIKEY:
+        logger.info(
+            "Watson X API key not configured. Falling back to local knowledge base."
+        )
+        fallback_response = generate_local_rights_response(
+            message_data.message, current_user
+        )
+        fallback_response["source"] = "local_fallback"
+        return fallback_response
 
     try:
         # Prepare the payload for the AI agent
@@ -375,15 +395,15 @@ async def chat_with_citizen_rights_agent(
                 agent_endpoint, json=payload_scoring, headers=headers
             )
 
-            # Handle API errors with more context
             if response.status_code != 200:
-                raise HTTPException(
-                    status_code=502,
-                    detail=(
-                        f"AI agent service error: {response.status_code}, "
-                        f"Response: {response.text}"
-                    ),
+                logger.warning(
+                    f"AI agent service error: {response.status_code}. Falling back to local knowledge."
                 )
+                fallback_response = generate_local_rights_response(
+                    message_data.message, current_user
+                )
+                fallback_response["source"] = "local_fallback"
+                return fallback_response
 
             agent_response = response.json()
 
@@ -418,25 +438,33 @@ async def chat_with_citizen_rights_agent(
                     ],
                 ),
                 "sources": agent_response.get("sources", []),
+                "source": "live_watsonx",
             }
 
         return bot_response
 
     except httpx.TimeoutException:
-        raise HTTPException(
-            status_code=504, detail="AI agent service timeout. Please try again."
-        )
-    except httpx.RequestError as e:
-        raise HTTPException(
-            status_code=502, detail=f"Failed to connect to AI agent service: {str(e)}"
-        )
-    except Exception as e:
-        print(f"AI agent service error: {str(e)}")
-
-        # Fallback to local rights and schemes knowledge
+        logger.warning("AI agent service timeout. Falling back to local knowledge.")
         fallback_response = generate_local_rights_response(
             message_data.message, current_user
         )
+        fallback_response["source"] = "local_fallback"
+        return fallback_response
+    except httpx.RequestError as e:
+        logger.warning(
+            f"Failed to connect to AI agent service: {str(e)}. Using fallback."
+        )
+        fallback_response = generate_local_rights_response(
+            message_data.message, current_user
+        )
+        fallback_response["source"] = "local_fallback"
+        return fallback_response
+    except Exception as e:
+        logger.warning(f"AI agent service error: {str(e)}. Using local fallback.")
+        fallback_response = generate_local_rights_response(
+            message_data.message, current_user
+        )
+        fallback_response["source"] = "local_fallback"
         return fallback_response
 
 

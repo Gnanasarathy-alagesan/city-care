@@ -1,17 +1,16 @@
 # Mock WatsonX AI Service
 import json
+import logging
 import os
 import re
 
 from dotenv import load_dotenv
-from ibm_watsonx_ai.credentials import Credentials
-from ibm_watsonx_ai.foundation_models import ModelInference
 
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-
 dotenv_path = os.path.join(parent_dir, ".env.local")
-
 load_dotenv(dotenv_path=dotenv_path)
+
+logger = logging.getLogger(__name__)
 
 
 def extract_full_json(generated_text):
@@ -60,6 +59,34 @@ def extract_full_json(generated_text):
 
 
 class WatsonXService:
+    FALLBACK_ANALYTICS = {
+        "overview": {
+            "totalComplaints": 156,
+            "resolvedComplaints": 98,
+            "avgResolutionTime": 4.5,
+            "resourceUtilization": 78.5,
+            "citizenSatisfaction": 82.0,
+            "costEfficiency": 88.0,
+            "activeResources": 24,
+            "pendingComplaints": 32,
+        },
+        "insights": [
+            "High complaint volume in water supply category detected",
+            "Resource utilization peak hours: 9 AM - 11 AM",
+            "Urban areas have 35% longer resolution times",
+        ],
+        "trends": {
+            "complaintTrend": "Increasing",
+            "resolutionTrend": "Stable",
+            "satisfactionTrend": "Improving",
+        },
+        "recommendations": [
+            "Allocate additional resources during peak hours",
+            "Focus on water supply infrastructure improvements",
+            "Implement preventive maintenance in high-complaint areas",
+        ],
+    }
+
     def __init__(self, model=None):
         self.intents = {
             "file_complaint": ["complaint", "report", "issue", "problem", "file"],
@@ -137,17 +164,55 @@ class WatsonXService:
                     Now assign the priority:
             """,
         }
-        # WatsonX config
-        self.model_id = model or os.getenv("WATSONX_MODEL")
-        self.project_id = os.getenv("PROJECT_ID")
-        self.credentials = Credentials(
-            url=os.getenv("WATSONX_URL"), api_key=os.getenv("WATSONX_APIKEY")
-        )
-        self.model = ModelInference(
-            model_id=self.model_id,
-            credentials=self.credentials,
-            project_id=self.project_id,
-        )
+
+        self.is_watson_x_available = self._check_watson_x_credentials()
+        self.model = None
+        self.model_id = None
+        self.project_id = None
+        self.credentials = None
+
+        if self.is_watson_x_available:
+            try:
+                from ibm_watsonx_ai.credentials import Credentials
+                from ibm_watsonx_ai.foundation_models import ModelInference
+
+                self.model_id = model or os.getenv("WATSONX_MODEL")
+                self.project_id = os.getenv("PROJECT_ID")
+                self.credentials = Credentials(
+                    url=os.getenv("WATSONX_URL"), api_key=os.getenv("WATSONX_APIKEY")
+                )
+                self.model = ModelInference(
+                    model_id=self.model_id,
+                    credentials=self.credentials,
+                    project_id=self.project_id,
+                )
+                logger.info("Watson X service initialized successfully")
+            except Exception as e:
+                logger.warning(
+                    f"Failed to initialize Watson X: {str(e)}. Using fallback mode."
+                )
+                self.is_watson_x_available = False
+        else:
+            logger.info(
+                "Watson X credentials not configured. Running in fallback mode."
+            )
+
+    def _check_watson_x_credentials(self) -> bool:
+        """
+        Check if all required Watson X credentials are configured
+        Returns True only if all credentials are present
+        """
+        required_env_vars = [
+            "WATSONX_APIKEY",
+            "WATSONX_URL",
+            "PROJECT_ID",
+            "WATSONX_MODEL",
+        ]
+        for var in required_env_vars:
+            if not os.getenv(var):
+                logger.debug(f"Missing Watson X credential: {var}")
+                return False
+        return True
 
     def analyze_message(self, message: str, history: list[dict] = None) -> dict:
         message_lower = message.lower()
@@ -205,7 +270,7 @@ class WatsonXService:
         return {
             "message": response_message,
             "intent": detected_intent,
-            "confidence": min(confidence + 0.3, 1.0),  # Boost confidence
+            "confidence": min(confidence + 0.3, 1.0),
             "entities": entities,
             "suggestedActions": suggested_actions,
         }
@@ -214,51 +279,80 @@ class WatsonXService:
         self, complaints_data: list, resources_data: list, busy_resources_data: list
     ) -> dict:
         """
+        Returns Watson X insights if available, otherwise returns static fallback data
         Generates analytical insights using WatsonX AI by combining complaint & resource data.
 
         Args:
             complaints_data (dict): Dictionary of complaint data from API.
             resources_data (dict): Dictionary of resource data from API.
+            busy_resources_data (dict): Dictionary of busy resource data from API.
 
         Returns:
             dict: JSON-formatted analytics containing overview, insights, trends, and recommendations.
         """
-        # Structure data for the prompt
-        input_payload = {
-            "complaints": complaints_data,
-            "resources": resources_data,
-            "busy_resources": busy_resources_data,
-        }
+        if not self.is_watson_x_available:
+            logger.info("Watson X not available. Returning fallback analytics data.")
+            return self.FALLBACK_ANALYTICS
 
-        # Call WatsonX
-        response = self.model.generate(
-            prompt=self.prompts["analytical_insights"](input_payload),
-            params={
-                "decoding_method": "greedy",
-                "max_new_tokens": 800,
-                "min_new_tokens": 50,
-                "temperature": 0,
-            },
-        )
+        try:
+            # Structure data for the prompt
+            input_payload = {
+                "complaints": complaints_data,
+                "resources": resources_data,
+                "busy_resources": busy_resources_data,
+            }
 
-        generated_text = response.get("results", [{}])[0].get("generated_text", "{}")
-        return extract_full_json(generated_text)
+            # Call WatsonX
+            response = self.model.generate(
+                prompt=self.prompts["analytical_insights"](input_payload),
+                params={
+                    "decoding_method": "greedy",
+                    "max_new_tokens": 800,
+                    "min_new_tokens": 50,
+                    "temperature": 0,
+                },
+            )
+
+            generated_text = response.get("results", [{}])[0].get(
+                "generated_text", "{}"
+            )
+            return extract_full_json(generated_text)
+        except Exception as e:
+            logger.error(
+                f"Error calling Watson X: {str(e)}. Falling back to static data."
+            )
+            return self.FALLBACK_ANALYTICS
 
     def analyze_priority(self, description: str) -> str:
+        """
+        Returns static priority if Watson X is not available
+        Analyzes priority using Watson X or returns default priority.
+        """
+        if not self.is_watson_x_available:
+            logger.info("Watson X not available. Returning default priority.")
+            return "Medium"
 
-        input_payload = {
-            "description": description,
-        }
+        try:
+            input_payload = {
+                "description": description,
+            }
 
-        prompt_text = self.prompts["analyze_priority"](input_payload)
+            prompt_text = self.prompts["analyze_priority"](input_payload)
 
-        response = self.model.generate(
-            prompt=prompt_text,
-            params={
-                "decoding_method": "greedy",
-                "max_new_tokens": 10,
-                "temperature": 0,
-                "stop_sequences": ["\n"],
-            },
-        )
-        return str(response.get("results", [{}])[0].get("generated_text", "").strip())
+            response = self.model.generate(
+                prompt=prompt_text,
+                params={
+                    "decoding_method": "greedy",
+                    "max_new_tokens": 10,
+                    "temperature": 0,
+                    "stop_sequences": ["\n"],
+                },
+            )
+            return str(
+                response.get("results", [{}])[0].get("generated_text", "").strip()
+            )
+        except Exception as e:
+            logger.error(
+                f"Error analyzing priority with Watson X: {str(e)}. Returning default."
+            )
+            return "Medium"

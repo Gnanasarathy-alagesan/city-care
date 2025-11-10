@@ -9,16 +9,18 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-
 from routes.admin_routes import router as admin_router
 from routes.auth_routes import router as auth_router
 from routes.bot_routes import router as bot_router
 from routes.user_routes import router as user_router
 from watsonx.service import WatsonXService
+from watsonx.status import log_watson_x_startup
 
 load_dotenv("../.env.local")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+log_watson_x_startup()
 
 
 async def lifespan(app: FastAPI):
@@ -80,6 +82,27 @@ async def health_check():
         dict: Health status and timestamp
     """
     return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
+@app.get("/api/health/watson-x")
+async def watson_x_health_check():
+    """
+    Check Watson X service status and configuration.
+
+    Returns:
+        dict: Watson X service status including configuration state and mode
+    """
+    from watsonx.status import get_watson_x_status
+
+    status = get_watson_x_status()
+    return {
+        "service": "watson-x",
+        "status": "healthy" if status["isConfigured"] else "degraded",
+        "mode": status["mode"],
+        "isConfigured": status["isConfigured"],
+        "credentialStatus": status["credentialStatus"],
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 # Include routers
