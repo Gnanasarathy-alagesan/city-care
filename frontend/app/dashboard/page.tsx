@@ -61,28 +61,29 @@ export default function DashboardPage() {
   }, [toast])
 
   const statsCards = [
-    {
-      title: "Total Complaints",
-      value: stats.totalComplaints.toString(),
-      icon: FileText,
-      color: "text-blue-600",
-      bgColor: "bg-blue-100"
-    },
-    {
-      title: "In Progress",
-      value: stats.inProgress.toString(),
-      icon: Clock,
-      color: "text-amber-600",
-      bgColor: "bg-amber-100"
-    },
-    {
-      title: "Resolved",
-      value: stats.resolved.toString(),
-      icon: CheckCircle,
-      color: "text-green-600",
-      bgColor: "bg-green-100"
-    }
-  ]
+  {
+    title: "Total Complaints",
+    value: (stats.totalComplaints ?? 0).toString(),
+    icon: FileText,
+    color: "text-blue-600",
+    bgColor: "bg-blue-100"
+  },
+  {
+    title: "In Progress",
+    value: (stats.inProgress ?? 0).toString(),
+    icon: Clock,
+    color: "text-amber-600",
+    bgColor: "bg-amber-100"
+  },
+  {
+    title: "Resolved",
+    value: (stats.resolved ?? 0).toString(),
+    icon: CheckCircle,
+    color: "text-green-600",
+    bgColor: "bg-green-100"
+  }
+]
+
 
   const getStatusDotColor = (status: string) => {
     switch (status.toLowerCase()) {
