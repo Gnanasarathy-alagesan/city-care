@@ -37,7 +37,6 @@ app = FastAPI(
     title="CityCare API",
     description="Backend service for CityCare citizen complaint platform",
     version="1.0.0",
-    docs_url="/api/docs",
 )
 
 app.mount("/uploads", StaticFiles(directory="./uploads"), name="uploads")
