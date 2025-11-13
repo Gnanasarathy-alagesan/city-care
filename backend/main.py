@@ -37,9 +37,6 @@ app = FastAPI(
     title="CityCare API",
     description="Backend service for CityCare citizen complaint platform",
     version="1.0.0",
-    openapi_url="/api/openapi.json",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
 )
 
 app.mount("/uploads", StaticFiles(directory="./uploads"), name="uploads")
@@ -47,7 +44,8 @@ app.mount("/uploads", StaticFiles(directory="./uploads"), name="uploads")
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS").split(","),
+    # allow_origins=os.getenv("CORS_ORIGINS").split(","),
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
